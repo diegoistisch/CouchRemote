@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+
+# Xcode (Projekt wird mit XcodeGen aus project.yml erzeugt)
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+DerivedData/
+build/
+
+# Von XcodeGen erzeugt
+RemoteApp/Info.plist
+HostApp/Info.plist
+HostApp/CouchHost.entitlements
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Build-Logs und Hilfsdateien
+*.log
+Design/codex-exec-help.txt
