@@ -36,6 +36,8 @@ targets:
       properties:
         CFBundleDisplayName: CouchRemote
         CFBundleDevelopmentRegion: de
+        # 120 Hz (ProMotion) statt der 60-Hz-Grenze für Apps: doppelt so viele Trackpad-Updates
+        CADisableMinimumFrameDurationOnPhone: true
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSLocalNetworkUsageDescription: CouchRemote sucht deinen Mac im Heimnetz, um ihn fernzusteuern.
