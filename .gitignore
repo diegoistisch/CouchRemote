@@ -21,3 +21,6 @@ Package.resolved
 # Build-Logs und Hilfsdateien
 *.log
 Design/codex-exec-help.txt
+
+# Weitergabe-Builds
+dist/

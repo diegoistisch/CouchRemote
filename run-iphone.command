@@ -5,8 +5,17 @@ cd "$(dirname "$0")"
 [[ -x /opt/homebrew/bin/brew ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
 
 TEAM="8K6F5K4NXG"
-DEVICE="YOUR-IPHONE-UDID"
 BUNDLE="at.diego.couchremote.ios"
+
+# Gekoppeltes iPhone automatisch finden (oder per COUCHREMOTE_DEVICE=<UDID> vorgeben).
+DEVICE="${COUCHREMOTE_DEVICE:-$(xcrun devicectl list devices 2>/dev/null \
+  | grep physical | grep available | grep iPhone \
+  | grep -oE '[0-9A-F]{8}-[0-9A-F]{16}' | head -1)}"
+if [[ -z "$DEVICE" ]]; then
+  echo "✗ Kein verbundenes iPhone gefunden (entsperrt, im selben WLAN oder per Kabel?)" | tee run-iphone.log
+  echo "EXIT=1" >> run-iphone.log
+  exit 1
+fi
 
 {
   set -e
