@@ -11,6 +11,8 @@ controlled from the iPhone with a trackpad, player controls and a keyboard.
 | `RemoteKit/` | Shared Swift package: protocol messages, fast UDP channel, app model, search URLs, icon lookup |
 | `HostApp/` | **CouchHost** (macOS): Bonjour/WebSocket server, input injection via `CGEvent`, tvOS-style home screen |
 | `RemoteApp/` | **CouchRemote** (iOS): finds the Mac via Bonjour, trackpad, player controls, keyboard, app management |
+| `RemoteWidgets/` | Widget extension: the remote as a Live Activity on the lock screen and in the Dynamic Island |
+| `Shared/` | Code compiled into both the app and the widget extension (Live Activity attributes, button intent) |
 | `Design/` | App icons and the prompt used to generate them |
 | `project.yml` | XcodeGen configuration that generates the Xcode project |
 
@@ -65,6 +67,19 @@ Protocol tests: `cd RemoteKit && swift test`
 | Keyboard → "In App suchen" | Opens the app's search page with your query |
 
 Note: with audio over HDMI, macOS often locks the system volume. Use the TV's own remote in that case.
+
+## Lock screen remote (Live Activity)
+
+As soon as the app is connected to a Mac, a remote appears on the lock screen and in the Dynamic Island,
+so you can control the TV without unlocking the iPhone. Turn it off in the TV menu ("Auf dem Sperrbildschirm").
+
+- Lock screen: D-pad with OK (navigates the home screen), back, home, play/pause, volume down/mute/up.
+- Dynamic Island (long press): the same buttons, D-pad in one row.
+- Not available: trackpad and keyboard. Live Activities only support buttons, and text input needs an unlocked phone.
+- Each button is a `LiveActivityIntent`. iOS runs it inside the app process (waking the app in the background
+  if needed). If the connection fell asleep, the app checks it with a WebSocket ping and otherwise reconnects
+  straight to the last Mac using its stored pairing token. Pairing itself still has to happen in the app.
+- iOS ends Live Activities after at most 8 hours. Opening the app starts a new one.
 
 ## Home screen
 
