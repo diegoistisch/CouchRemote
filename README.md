@@ -75,8 +75,9 @@ Note: with audio over HDMI, macOS often locks the system volume. Use the TV's ow
 As soon as the app is connected to a Mac, a remote appears on the lock screen and in the Dynamic Island,
 so you can control the TV without unlocking the iPhone. Turn it off in the TV menu ("Auf dem Sperrbildschirm").
 
-- Lock screen: D-pad with OK (navigates the home screen), back, home, play/pause, volume down/mute/up.
-- Dynamic Island (long press): the same buttons, D-pad in one row.
+- Lock screen: D-pad with OK (navigates the home screen), back, home, play/pause, volume down/mute/up,
+  and a power button next to the Mac name that switches the TV on (see "TV power").
+- Dynamic Island (long press): the same buttons, D-pad in one row, power button next to the Mac name.
 - Not available: trackpad and keyboard. Live Activities only support buttons, and text input needs an unlocked phone.
 - Each button is a `LiveActivityIntent`. iOS runs it inside the app process (waking the app in the background
   if needed). If the connection fell asleep, the app checks it with a WebSocket ping and otherwise reconnects

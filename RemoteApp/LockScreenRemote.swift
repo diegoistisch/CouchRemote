@@ -46,4 +46,9 @@ enum LockScreenRemote {
     static func press(_ key: RemoteKey) async {
         await RemoteClient.shared.sendInBackground(.key(key))
     }
+
+    /// ⏻ von der Live Activity: CouchHost schaltet den Fernseher ein.
+    static func toggleTV() async {
+        await RemoteClient.shared.sendInBackground(.tvPower)
+    }
 }

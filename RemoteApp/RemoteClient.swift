@@ -360,11 +360,15 @@ final class RemoteClient: ObservableObject {
     /// Verbindung ist eingeschlafen oder abgerissen: erst prüfen (WebSocket-Ping), sonst
     /// direkt zum zuletzt genutzten Mac neu verbinden (ohne auf die Bonjour-Suche zu warten).
     func sendInBackground(_ command: RemoteCommand) async {
+        await sendInBackground(.command(command))
+    }
+
+    func sendInBackground(_ message: ClientMessage) async {
         if !(await isAlive()) {
             guard await reconnectToLastMac() else { return }
         }
         await withCheckedContinuation { continuation in
-            sendMessage(.command(command)) { continuation.resume() }
+            sendMessage(message) { continuation.resume() }
         }
     }
 
