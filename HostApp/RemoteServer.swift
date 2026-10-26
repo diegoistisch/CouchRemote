@@ -54,6 +54,7 @@ final class RemoteServer: ObservableObject {
     private static let unauthenticatedTimeout: TimeInterval = 120
 
     let home: HomeController
+    let tv: TVController
     private let pairings = PairingStore()
     private var listener: NWListener?
     private var clients: [ObjectIdentifier: Client] = [:] // nur Main-Thread
@@ -79,7 +80,7 @@ final class RemoteServer: ObservableObject {
     private let udpPort = Locked<UInt16?>(nil)
     private let fastSessions = Locked([UInt64: FastSession]())
 
-    init(home: HomeController) {
+    init(home: HomeController, tv: TVController) {
         let queue = DispatchQueue(label: "at.diego.couchremote.network", qos: .userInteractive)
         let injector = InputInjector()
         networkQueue = queue
@@ -88,6 +89,7 @@ final class RemoteServer: ObservableObject {
             injector.perform(.mouseMove(dx: dx, dy: dy))
         }
         self.home = home
+        self.tv = tv
         pairedDevices = pairings.devices
         home.onAppsChanged = { [weak self] apps in
             self?.broadcast(.apps(apps))
@@ -394,6 +396,12 @@ final class RemoteServer: ObservableObject {
 
         case let (.search(appID, query), .authenticated):
             home.search(appID: appID, query: String(query.prefix(200)))
+
+        case (.tvPower, .authenticated):
+            Task {
+                let result = await tv.togglePower()
+                if let client = clients[id] { send(.tvStatus(result), to: client) }
+            }
 
         default:
             break // Nachricht passt nicht zum Zustand (z. B. vor der Kopplung) → ignorieren
