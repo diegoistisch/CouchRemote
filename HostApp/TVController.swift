@@ -83,7 +83,13 @@ final class TVController: ObservableObject {
         defer { isBusy = false }
 
         let state = try? await powerStatus()
-        if state != nil { await learnMACIfNeeded() }
+        // Auch ein abgelehnter Verbindungsversuch füllt den ARP-Cache → MAC-Adresse lernen
+        await learnMACIfNeeded()
+
+        // Modelle ohne Sony-Web-API (z. B. KD-49XF7005) antworten nur per DLNA, und das nur, wenn sie an sind.
+        if state == nil, await isMediaRendererUp() {
+            return report("Fernseher ist an. Ausschalten geht bei diesem Modell nicht übers Netzwerk.")
+        }
 
         if state == "active" {
             do {
@@ -261,7 +267,26 @@ final class TVController: ObservableObject {
         }
     }
 
+    /// DLNA-Beschreibung des Fernsehers (Port 2870) erreichbar = Fernseher ist eingeschaltet.
+    private func isMediaRendererUp() async -> Bool {
+        guard let url = URL(string: "http://\(trimmedHost):2870/dmr.xml") else { return false }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 2
+        guard let (_, response) = try? await session.data(for: request) else { return false }
+        return (response as? HTTPURLResponse)?.statusCode == 200
+    }
+
     // MARK: - Wake-on-LAN
+
+    /// MAC-Adresse von Hand setzen (Feld im CouchHost-Fenster). Leer = wieder automatisch lernen.
+    func setMAC(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty {
+            mac = nil
+        } else if let parsed = WakeOnLAN.parseMAC(trimmed) {
+            mac = parsed
+        }
+    }
 
     /// MAC-Adresse aus dem ARP-Cache lernen, solange der Fernseher erreichbar ist.
     private func learnMACIfNeeded() async {
@@ -285,7 +310,11 @@ final class TVController: ObservableObject {
         let packet = WakeOnLAN.magicPacket(mac: mac)
         var targets = [in_addr_t(0xFFFF_FFFF)] // 255.255.255.255
         var direct = in_addr()
-        if inet_pton(AF_INET, trimmedHost, &direct) == 1 { targets.append(direct.s_addr) }
+        if inet_pton(AF_INET, trimmedHost, &direct) == 1 {
+            targets.append(direct.s_addr)
+            // Broadcast des eigenen /24-Netzes (z. B. 192.168.0.255), s_addr ist in Netzwerk-Byte-Reihenfolge
+            targets.append((UInt32(bigEndian: direct.s_addr) | 0xFF).bigEndian)
+        }
 
         let fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         guard fd >= 0 else { return }

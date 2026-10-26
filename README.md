@@ -100,7 +100,12 @@ Setup:
    status). A fixed address in the router avoids it changing.
 3. Click "Mit Fernseher koppeln" and enter the PIN shown on the TV. Models with *IP control* can use a
    pre-shared key instead.
-4. Click "Ein/Aus testen" once while the TV is on, so CouchHost learns its MAC address.
+4. Click "Ein/Aus testen" once while the TV is on, so CouchHost learns its MAC address
+   (or enter it by hand).
+
+Older Linux-based Bravias such as the KD-49XF7005 have no Sony web API, only a DLNA renderer on
+port 2870. There the button can only switch the TV on (Wake-on-LAN); while port 2870 answers,
+CouchHost reports that the TV is on and can't be switched off over the network.
 
 ## Home screen
 
