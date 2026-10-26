@@ -89,10 +89,8 @@ final class TVController: ObservableObject {
         // Auch ein abgelehnter Verbindungsversuch füllt den ARP-Cache → MAC-Adresse lernen
         await learnMACIfNeeded()
 
-        // Modelle ohne Sony-Web-API (z. B. KD-49XF7005) antworten nur per DLNA, und das nur, wenn sie an sind.
-        if state == nil, await isMediaRendererUp() {
-            return report("Fernseher ist an. Ausschalten geht bei diesem Modell nicht übers Netzwerk.")
-        }
+        // Modelle ohne Sony-Web-API (z. B. KD-49XF7005) verraten ihren Zustand nicht zuverlässig
+        // (DLNA antwortet auch im Standby) → unten immer das Weckpaket schicken, das stört nicht, wenn er schon an ist.
 
         if state == "active" {
             do {
@@ -268,15 +266,6 @@ final class TVController: ObservableObject {
         case 401, 403: throw TVError.unauthorized
         default: throw TVError.http(status: http.statusCode)
         }
-    }
-
-    /// DLNA-Beschreibung des Fernsehers (Port 2870) erreichbar = Fernseher ist eingeschaltet.
-    private func isMediaRendererUp() async -> Bool {
-        guard let url = URL(string: "http://\(trimmedHost):2870/dmr.xml") else { return false }
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 2
-        guard let (_, response) = try? await session.data(for: request) else { return false }
-        return (response as? HTTPURLResponse)?.statusCode == 200
     }
 
     // MARK: - Wake-on-LAN

@@ -105,8 +105,8 @@ Setup:
    (or enter it by hand).
 
 Older Linux-based Bravias such as the KD-49XF7005 have no Sony web API, only a DLNA renderer on
-port 2870. There the button can only switch the TV on (Wake-on-LAN); while port 2870 answers,
-CouchHost reports that the TV is on and can't be switched off over the network.
+port 2870 (which also answers in standby, so it can't tell on from off). There the button always sends
+the Wake-on-LAN packet: it switches the TV on and does nothing if it already is.
 
 ## Home screen
 
