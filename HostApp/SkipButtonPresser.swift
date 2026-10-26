@@ -67,7 +67,7 @@ enum SkipButtonPresser {
             if inWebArea, let text = text(of: element), let elementFrame = frame(of: element),
                elementFrame.width > 4, elementFrame.height > 4, windowFrame.intersects(elementFrame) {
                 found.append(Candidate(element: element, text: text, frame: elementFrame,
-                                       isButton: role == kAXButtonRole || role == kAXLinkRole))
+                                       isButton: role == kAXButtonRole || role == "AXLink"))
                 continue // Kinder (Beschriftung des Knopfs) nicht nochmal prüfen
             }
             if let children = value(element, kAXChildrenAttribute) as? [AXUIElement] {
