@@ -9,6 +9,12 @@ struct RemoteView: View {
     var body: some View {
         VStack(spacing: 14) {
             header
+            if let notice = client.tvNotice {
+                Text(notice)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .transition(.opacity)
+            }
 
             VStack(spacing: 14) {
                 TrackpadView()
@@ -54,6 +60,16 @@ struct RemoteView: View {
                     .accessibilityLabel("Schneller Kanal aktiv")
             }
             Spacer()
+            Button {
+                Haptics.tap()
+                client.toggleTV()
+            } label: {
+                Image(systemName: "power")
+                    .font(.title3)
+            }
+            .accessibilityLabel("Fernseher ein/aus")
+            .disabled(!client.isConnected)
+            .padding(.trailing, 8)
             Button {
                 client.showKeyboard()
             } label: {

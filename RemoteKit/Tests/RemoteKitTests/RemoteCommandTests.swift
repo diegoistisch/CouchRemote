@@ -14,7 +14,8 @@ final class RemoteCommandTests: XCTestCase {
             .hello(deviceName: "iPhone", token: "abc"),
             .pair(code: "0420"),
             .openApp(id: UUID()),
-            .setApps(HomeApp.defaults)
+            .setApps(HomeApp.defaults),
+            .tvPower
         ]
         for message in messages {
             let data = try RemoteProtocol.encode(message)
@@ -25,12 +26,37 @@ final class RemoteCommandTests: XCTestCase {
     func testRoundTripServerMessages() throws {
         let messages: [ServerMessage] = [
             .welcome, .pairingRequired, .pairingFailed(attemptsLeft: 3), .paired(token: "t0k3n"),
-            .apps(HomeApp.defaults)
+            .apps(HomeApp.defaults), .tvStatus("Fernseher aus")
         ]
         for message in messages {
             let data = try RemoteProtocol.encode(message)
             XCTAssertEqual(try RemoteProtocol.decode(ServerMessage.self, from: data), message)
         }
+    }
+
+    func testMACParsing() {
+        XCTAssertEqual(WakeOnLAN.parseMAC("AC:9B:0A:12:3D:4F"), [0xAC, 0x9B, 0x0A, 0x12, 0x3D, 0x4F])
+        // arp unter macOS lässt führende Nullen weg
+        XCTAssertEqual(WakeOnLAN.parseMAC("ac:9b:a:12:3d:4f"), [0xAC, 0x9B, 0x0A, 0x12, 0x3D, 0x4F])
+        XCTAssertEqual(WakeOnLAN.parseMAC("ac-9b-0a-12-3d-4f"), [0xAC, 0x9B, 0x0A, 0x12, 0x3D, 0x4F])
+        XCTAssertNil(WakeOnLAN.parseMAC("ac:9b:0a:12:3d"))
+        XCTAssertNil(WakeOnLAN.parseMAC("(incomplete)"))
+        XCTAssertNil(WakeOnLAN.parseMAC("ac:9b:0a:12:3d:4g"))
+    }
+
+    func testMagicPacket() {
+        let mac: [UInt8] = [0xAC, 0x9B, 0x0A, 0x12, 0x3D, 0x4F]
+        let packet = [UInt8](WakeOnLAN.magicPacket(mac: mac))
+        XCTAssertEqual(packet.count, 6 + 16 * 6)
+        XCTAssertEqual(Array(packet[0..<6]), [UInt8](repeating: 0xFF, count: 6))
+        XCTAssertEqual(Array(packet[6..<12]), mac)
+        XCTAssertEqual(Array(packet[96..<102]), mac)
+    }
+
+    func testMACFromArpOutput() {
+        let output = "? (192.168.1.40) at ac:9b:a:12:3d:4f on en0 ifscope [ethernet]\n"
+        XCTAssertEqual(WakeOnLAN.macFromArp(output), [0xAC, 0x9B, 0x0A, 0x12, 0x3D, 0x4F])
+        XCTAssertNil(WakeOnLAN.macFromArp("? (192.168.1.40) at (incomplete) on en0 ifscope [ethernet]"))
     }
 
     func testHomeAppValidation() {
