@@ -7,6 +7,9 @@ import UIKit
 /// Findet CouchHost-Macs per Bonjour, koppelt sich per Code und schickt Befehle über WebSocket.
 @MainActor
 final class RemoteClient: ObservableObject {
+    /// Eine Instanz für App und Sperrbildschirm-Knöpfe (siehe `LockScreenRemote`).
+    static let shared = RemoteClient()
+
     struct DiscoveredMac: Identifiable, Hashable {
         let name: String
         let endpoint: NWEndpoint
@@ -226,6 +229,7 @@ final class RemoteClient: ObservableObject {
         codeError = nil
         status = "Verbunden mit \(mac)"
         UserDefaults.standard.set(mac, forKey: lastMacKey)
+        LockScreenRemote.start(macName: mac)
     }
 
     func submit(code: String) {
@@ -350,7 +354,61 @@ final class RemoteClient: ObservableObject {
         }
     }
 
-    // MARK: - Senden
+    // MARK: - Sperrbildschirm
+
+    /// Befehl von der Live Activity. Die App läuft dann meist im Hintergrund und ihre
+    /// Verbindung ist eingeschlafen oder abgerissen: erst prüfen (WebSocket-Ping), sonst
+    /// direkt zum zuletzt genutzten Mac neu verbinden (ohne auf die Bonjour-Suche zu warten).
+    func sendInBackground(_ command: RemoteCommand) async {
+        if !(await isAlive()) {
+            guard await reconnectToLastMac() else { return }
+        }
+        await withCheckedContinuation { continuation in
+            sendMessage(.command(command)) { continuation.resume() }
+        }
+    }
+
+    private func reconnectToLastMac() async -> Bool {
+        if phase != .connecting {
+            guard let name = currentMac ?? UserDefaults.standard.string(forKey: lastMacKey),
+                  TokenStore.token(for: name) != nil else { return false } // Kopplung geht nur in der App
+            let endpoint = macs.first(where: { $0.name == name })?.endpoint
+                ?? .service(name: name, type: RemoteProtocol.bonjourType, domain: "local.", interface: nil)
+            connect(to: DiscoveredMac(name: name, endpoint: endpoint))
+        }
+        // Bis zu 5 s auf `welcome` warten.
+        for _ in 0..<100 where phase == .connecting {
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        return isConnected
+    }
+
+    /// Antwortet der Mac innerhalb einer Sekunde auf einen WebSocket-Ping?
+    private func isAlive() async -> Bool {
+        guard isConnected, let connection else { return false }
+        final class Once { var done = false }
+        let once = Once()
+        return await withCheckedContinuation { continuation in
+            let finish: (Bool) -> Void = { alive in
+                guard !once.done else { return }
+                once.done = true
+                continuation.resume(returning: alive)
+            }
+            let metadata = NWProtocolWebSocket.Metadata(opcode: .ping)
+            metadata.setPongHandler(.main) { error in
+                MainActor.assumeIsolated { finish(error == nil) }
+            }
+            let context = NWConnection.ContentContext(identifier: "ping", metadata: [metadata])
+            connection.send(content: Data(), contentContext: context, isComplete: true,
+                            completion: .contentProcessed { error in
+                                guard error != nil else { return }
+                                MainActor.assumeIsolated { finish(false) }
+                            })
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                MainActor.assumeIsolated { finish(false) }
+            }
+        }
+    }
 
     // MARK: - Startseite
 

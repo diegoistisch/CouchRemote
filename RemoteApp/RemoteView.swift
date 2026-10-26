@@ -5,6 +5,7 @@ import RemoteKit
 struct RemoteView: View {
     @EnvironmentObject private var client: RemoteClient
     @State private var showsApps = false
+    @AppStorage(LockScreenRemote.enabledKey) private var lockScreenRemote = true
 
     var body: some View {
         VStack(spacing: 14) {
@@ -95,6 +96,10 @@ struct RemoteView: View {
                 ForEach(client.macs) { mac in
                     Button(mac.name) { client.connect(to: mac) }
                 }
+                Divider()
+                Toggle(isOn: $lockScreenRemote) {
+                    Label("Auf dem Sperrbildschirm", systemImage: "lock.iphone")
+                }
                 if client.isConnected {
                     Divider()
                     Button("Trennen") { client.disconnect() }
@@ -110,6 +115,13 @@ struct RemoteView: View {
         }
         .sheet(item: $client.keyboardRequest) { request in
             KeyboardSheet(request: request).environmentObject(client)
+        }
+        .onChange(of: lockScreenRemote) { _, enabled in
+            if !enabled {
+                LockScreenRemote.stop()
+            } else if client.isConnected, let mac = client.currentMac {
+                LockScreenRemote.start(macName: mac)
+            }
         }
     }
 

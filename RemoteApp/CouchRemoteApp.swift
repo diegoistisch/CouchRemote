@@ -2,7 +2,7 @@ import SwiftUI
 
 @main
 struct CouchRemoteApp: App {
-    @StateObject private var client = RemoteClient()
+    @StateObject private var client = RemoteClient.shared
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {

@@ -10,6 +10,7 @@ build/
 
 # Von XcodeGen erzeugt
 RemoteApp/Info.plist
+RemoteWidgets/Info.plist
 HostApp/Info.plist
 HostApp/CouchHost.entitlements
 
