@@ -22,16 +22,19 @@ struct RemoteLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    KeyButton(key: .back, systemImage: "chevron.backward", label: "Zurück")
+                    KeyButton(key: .fullscreen, systemImage: "arrow.up.left.and.arrow.down.right", label: "Vollbild")
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     KeyButton(key: .home, systemImage: "house", label: "Home")
                 }
                 DynamicIslandExpandedRegion(.center) {
-                    Label(context.state.macName, systemImage: "tv")
-                        .font(.caption)
-                        .lineLimit(1)
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 8) {
+                        Label(context.state.macName, systemImage: "tv")
+                            .font(.caption)
+                            .lineLimit(1)
+                            .foregroundStyle(.secondary)
+                        PowerButton()
+                    }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(spacing: 6) {
@@ -90,12 +93,16 @@ private struct LockScreenView: View {
             .frame(width: 124)
 
             VStack(alignment: .leading, spacing: 6) {
-                Label(macName, systemImage: "tv")
-                    .font(.caption)
-                    .lineLimit(1)
-                    .foregroundStyle(.secondary)
+                HStack {
+                    Label(macName, systemImage: "tv")
+                        .font(.caption)
+                        .lineLimit(1)
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 4)
+                    PowerButton()
+                }
                 HStack(spacing: 6) {
-                    KeyButton(key: .back, systemImage: "chevron.backward", label: "Zurück")
+                    KeyButton(key: .fullscreen, systemImage: "arrow.up.left.and.arrow.down.right", label: "Vollbild")
                     KeyButton(key: .home, systemImage: "house", label: "Home")
                     KeyButton(key: .playPause, systemImage: "playpause.fill", label: "Play/Pause",
                               prominent: true)
@@ -132,5 +139,19 @@ private struct KeyButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
+    }
+}
+
+/// ⏻: Fernseher einschalten (CouchHost schickt das Wake-on-LAN-Paket).
+private struct PowerButton: View {
+    var body: some View {
+        Button(intent: TVPowerIntent()) {
+            Image(systemName: "power")
+                .font(.system(size: 13, weight: .bold))
+                .frame(width: 30, height: 26)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.18)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Fernseher ein/aus")
     }
 }

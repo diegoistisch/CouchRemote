@@ -75,8 +75,9 @@ Note: with audio over HDMI, macOS often locks the system volume. Use the TV's ow
 As soon as the app is connected to a Mac, a remote appears on the lock screen and in the Dynamic Island,
 so you can control the TV without unlocking the iPhone. Turn it off in the TV menu ("Auf dem Sperrbildschirm").
 
-- Lock screen: D-pad with OK (navigates the home screen), back, home, play/pause, volume down/mute/up.
-- Dynamic Island (long press): the same buttons, D-pad in one row.
+- Lock screen: D-pad with OK (navigates the home screen), fullscreen, home, play/pause, volume down/mute/up,
+  and a power button next to the Mac name that switches the TV on (see "TV power").
+- Dynamic Island (long press): the same buttons, D-pad in one row, power button next to the Mac name.
 - Not available: trackpad and keyboard. Live Activities only support buttons, and text input needs an unlocked phone.
 - Each button is a `LiveActivityIntent`. iOS runs it inside the app process (waking the app in the background
   if needed). If the connection fell asleep, the app checks it with a WebSocket ping and otherwise reconnects
@@ -100,7 +101,12 @@ Setup:
    status). A fixed address in the router avoids it changing.
 3. Click "Mit Fernseher koppeln" and enter the PIN shown on the TV. Models with *IP control* can use a
    pre-shared key instead.
-4. Click "Ein/Aus testen" once while the TV is on, so CouchHost learns its MAC address.
+4. Click "Ein/Aus testen" once while the TV is on, so CouchHost learns its MAC address
+   (or enter it by hand).
+
+Older Linux-based Bravias such as the KD-49XF7005 have no Sony web API, only a DLNA renderer on
+port 2870 (which also answers in standby, so it can't tell on from off). There the button always sends
+the Wake-on-LAN packet: it switches the TV on and does nothing if it already is.
 
 ## Skip intro
 

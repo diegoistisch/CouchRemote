@@ -13,6 +13,7 @@ struct HostStatusView: View {
     @AppStorage(HomeController.wallpaperPathKey) private var wallpaperPath: String?
     @AppStorage(PointerSmoother.defaultsKey) private var smoothingMs = PointerSmoother.defaultMilliseconds
     @State private var tvPIN = ""
+    @State private var tvMAC = ""
     @State private var isTrusted = InputInjector.hasAccessibility(prompt: false)
 
     private let refresh = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
@@ -167,8 +168,14 @@ struct HostStatusView: View {
             }
             SecureField("Pre-Shared Key (optional, statt PIN)", text: $tv.psk)
                 .frame(maxWidth: 260)
+            HStack {
+                TextField("MAC-Adresse fürs Einschalten", text: $tvMAC)
+                    .frame(maxWidth: 220)
+                    .onSubmit { tv.setMAC(tvMAC) }
+                Button("Übernehmen") { tv.setMAC(tvMAC) }
+            }
             Text(tv.mac.map { "MAC-Adresse: \(WakeOnLAN.format($0))" }
-                 ?? "MAC-Adresse wird gelernt, sobald der Fernseher einmal erreichbar war.")
+                 ?? "MAC-Adresse wird gelernt, sobald der Fernseher einmal erreichbar war, oder oben eintragen.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             if let status = tv.status {
