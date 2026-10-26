@@ -84,7 +84,7 @@ final class InputInjector: @unchecked Sendable {
         case .fullscreen: tap(KeyCode.f)
         case .browserBack: tap(KeyCode.leftBracket, flags: .maskCommand)
         case .deleteBackward: tap(KeyCode.delete)
-        case .home: break // öffnet die Startseite, wird vom Server abgefangen
+        case .home, .skip: break // wird vom Server abgefangen (Startseite bzw. SkipButtonPresser)
         case .volumeUp: mediaKey(MediaKey.soundUp)
         case .volumeDown: mediaKey(MediaKey.soundDown)
         case .mute: mediaKey(MediaKey.mute)

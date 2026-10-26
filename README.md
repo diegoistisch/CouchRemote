@@ -102,6 +102,14 @@ Setup:
    pre-shared key instead.
 4. Click "Ein/Aus testen" once while the TV is on, so CouchHost learns its MAC address.
 
+## Skip intro
+
+The skip button (⏭, next to fullscreen and on the lock-screen remote) presses Crunchyroll's
+"Opening überspringen" button, or any short "… überspringen" / "Skip …" button on the page. CouchHost
+looks for it through the Accessibility API in the frontmost browser window, which also reaches into the
+player's iframe and needs no browser setting. It prefers opening/intro buttons over others (e.g. recap)
+and reports back on the iPhone when no such button is showing.
+
 ## Home screen
 
 - Opens with the Home button on the screen that currently holds the mouse pointer (on the TV: the only one)
