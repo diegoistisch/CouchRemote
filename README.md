@@ -55,6 +55,7 @@ Protocol tests: `cd RemoteKit && swift test`
 | --- | --- |
 | Trackpad: 1 finger drag / tap | Move pointer / click (tap twice quickly = double-click) |
 | Trackpad: 2 finger drag / tap | Scroll / right-click |
+| Scroll strip (right of the trackpad) | Scroll vertically with one finger |
 | Rewind / fast-forward (hold = repeat) | Left / right arrow |
 | Play/Pause | Space |
 | Back: tap / hold | Escape / previous page (⌘[) |

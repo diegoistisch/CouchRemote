@@ -233,32 +233,15 @@ struct PairingSheet: View {
 struct TrackpadView: View {
     @EnvironmentObject private var client: RemoteClient
     @AppStorage("trackpadSensitivity") private var sensitivity = 1.0
+    /// Letzte Fingerposition in der Scroll-Leiste (nil = kein Finger drauf).
+    @State private var scrollStripLast: CGFloat?
 
     var body: some View {
         VStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 24)
-                    .fill(.quaternary)
-                Text("1 Finger: Zeiger · Tippen: Klick\n2 Finger: Scrollen · Tippen: Rechtsklick")
-                    .multilineTextAlignment(.center)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .allowsHitTesting(false)
-                TrackpadSurface(
-                    onMove: move,
-                    onScroll: { dx, dy in client.queueScroll(dx: dx * 2, dy: dy * 2) },
-                    onTap: {
-                        Haptics.tap()
-                        client.send(.click(.left))
-                    },
-                    onTwoFingerTap: {
-                        Haptics.tap()
-                        client.send(.click(.right))
-                    }
-                )
+            HStack(spacing: 8) {
+                trackpad
+                scrollStrip
             }
-            .clipShape(RoundedRectangle(cornerRadius: 24))
-            .accessibilityLabel("Trackpad")
 
             HStack {
                 Image(systemName: "tortoise")
@@ -268,6 +251,55 @@ struct TrackpadView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
         }
+    }
+
+    private var trackpad: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 24)
+                .fill(.quaternary)
+            Text("1 Finger: Zeiger · Tippen: Klick\n2 Finger: Scrollen · Tippen: Rechtsklick")
+                .multilineTextAlignment(.center)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .allowsHitTesting(false)
+            TrackpadSurface(
+                onMove: move,
+                onScroll: { dx, dy in client.queueScroll(dx: dx * 2, dy: dy * 2) },
+                onTap: {
+                    Haptics.tap()
+                    client.send(.click(.left))
+                },
+                onTwoFingerTap: {
+                    Haptics.tap()
+                    client.send(.click(.right))
+                }
+            )
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .accessibilityLabel("Trackpad")
+    }
+
+    /// Schmale Leiste rechts: 1 Finger hoch/runter = senkrecht scrollen.
+    private var scrollStrip: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 18)
+                .fill(.quaternary)
+            Image(systemName: "arrow.up.and.down")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .frame(width: 44)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    let dy = value.translation.height - (scrollStripLast ?? 0)
+                    scrollStripLast = value.translation.height
+                    if dy != 0 { client.queueScroll(dx: 0, dy: dy * 3) }
+                }
+                .onEnded { _ in scrollStripLast = nil }
+        )
+        .accessibilityLabel("Scrollen")
     }
 
     /// Zeigerbeschleunigung nach Geschwindigkeit wie beim Mac-Trackpad:
