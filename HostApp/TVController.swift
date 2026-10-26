@@ -18,10 +18,7 @@ final class TVController: ObservableObject {
     private static let clientIDKey = "tvClientID"
 
     @Published var host: String {
-        didSet {
-            UserDefaults.standard.set(host, forKey: Self.hostKey)
-            if host != oldValue { mac = nil } // anderer Fernseher → MAC neu lernen
-        }
+        didSet { UserDefaults.standard.set(host, forKey: Self.hostKey) }
     }
     @Published var psk: String {
         didSet { UserDefaults.standard.set(psk, forKey: Self.pskKey) }
@@ -78,9 +75,15 @@ final class TVController: ObservableObject {
     /// Fragt den Zustand ab und schaltet um. Gibt einen kurzen Text fürs iPhone zurück.
     @discardableResult
     func togglePower() async -> String {
-        guard isConfigured else { return report("Fernseher nicht eingerichtet (siehe CouchHost-Fenster)") }
         isBusy = true
         defer { isBusy = false }
+
+        guard isConfigured else {
+            // Ohne IP-Adresse geht nur Einschalten per Wake-on-LAN (Broadcast an die MAC-Adresse).
+            guard let mac else { return report("Fernseher nicht eingerichtet: IP-Adresse im CouchHost-Fenster eintragen") }
+            sendWakeOnLAN(to: mac)
+            return report("Fernseher wird eingeschaltet")
+        }
 
         let state = try? await powerStatus()
         // Auch ein abgelehnter Verbindungsversuch füllt den ARP-Cache → MAC-Adresse lernen

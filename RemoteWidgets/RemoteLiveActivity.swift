@@ -22,7 +22,7 @@ struct RemoteLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    KeyButton(key: .back, systemImage: "chevron.backward", label: "Zurück")
+                    KeyButton(key: .fullscreen, systemImage: "arrow.up.left.and.arrow.down.right", label: "Vollbild")
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     KeyButton(key: .home, systemImage: "house", label: "Home")
@@ -101,7 +101,7 @@ private struct LockScreenView: View {
                     PowerButton()
                 }
                 HStack(spacing: 6) {
-                    KeyButton(key: .back, systemImage: "chevron.backward", label: "Zurück")
+                    KeyButton(key: .fullscreen, systemImage: "arrow.up.left.and.arrow.down.right", label: "Vollbild")
                     KeyButton(key: .home, systemImage: "house", label: "Home")
                     KeyButton(key: .playPause, systemImage: "playpause.fill", label: "Play/Pause",
                               prominent: true)
