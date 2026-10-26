@@ -55,6 +55,7 @@ Protocol tests: `cd RemoteKit && swift test`
 | --- | --- |
 | Trackpad: 1 finger drag / tap | Move pointer / click (tap twice quickly = double-click) |
 | Trackpad: 2 finger drag / tap | Scroll / right-click |
+| Scroll strip (right of the trackpad) | Scroll vertically with one finger |
 | Rewind / fast-forward (hold = repeat) | Left / right arrow |
 | Play/Pause | Space |
 | Back: tap / hold | Escape / previous page (⌘[) |
@@ -63,8 +64,28 @@ Protocol tests: `cd RemoteKit && swift test`
 | Volume down / mute / up | Media keys (Mac volume) |
 | Keyboard → "Eintippen" | Types live wherever the Mac's text cursor is (Unicode, autocorrect, dictation) |
 | Keyboard → "In App suchen" | Opens the app's search page with your query |
+| Power (top bar) | Turns the TV on or off over the network (see below) |
 
 Note: with audio over HDMI, macOS often locks the system volume. Use the TV's own remote in that case.
+
+## TV power
+
+The Mac's HDMI port has no CEC, so CouchHost switches the TV over the home network instead
+(Sony Bravia, see `HostApp/TVController.swift`). The power button asks the TV for its state
+(`getPowerStatus`) and toggles:
+
+- Off: `setPowerStatus`, falling back to the IR code "PowerOff" over IRCC.
+- On: Wake-on-LAN magic packet to the TV's MAC address, plus `setPowerStatus` if the TV still answers
+  in standby. The MAC address is learned from the ARP cache the first time the TV is reachable.
+
+Setup:
+
+1. On the TV, turn on *Remote Start* and allow remote devices (Settings → Network).
+2. In the CouchHost window under "Fernseher", enter the TV's IP address (Settings → Network → Network
+   status). A fixed address in the router avoids it changing.
+3. Click "Mit Fernseher koppeln" and enter the PIN shown on the TV. Models with *IP control* can use a
+   pre-shared key instead.
+4. Click "Ein/Aus testen" once while the TV is on, so CouchHost learns its MAC address.
 
 ## Home screen
 

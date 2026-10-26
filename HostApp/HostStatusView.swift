@@ -1,4 +1,5 @@
 import Combine
+import RemoteKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -7,9 +8,11 @@ import UniformTypeIdentifiers
 struct HostStatusView: View {
     @EnvironmentObject private var server: RemoteServer
     @EnvironmentObject private var home: HomeController
+    @EnvironmentObject private var tv: TVController
     @AppStorage("showHomeOnLaunch") private var showHomeOnLaunch = false
     @AppStorage(HomeController.wallpaperPathKey) private var wallpaperPath: String?
     @AppStorage(PointerSmoother.defaultsKey) private var smoothingMs = PointerSmoother.defaultMilliseconds
+    @State private var tvPIN = ""
     @State private var isTrusted = InputInjector.hasAccessibility(prompt: false)
 
     private let refresh = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
@@ -29,6 +32,8 @@ struct HostStatusView: View {
             trackpadSection
             Divider()
             homeSection
+            Divider()
+            tvSection
             Divider()
             pairedDevicesSection
             Divider()
@@ -121,6 +126,62 @@ struct HostStatusView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private var tvSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Fernseher").font(.headline)
+            Text("Ein/Aus übers Heimnetz (Sony Bravia). Am TV „Remote Start“ einschalten. Die IP-Adresse steht unter Einstellungen → Netzwerk → Netzwerkstatus, am besten im Router fest vergeben.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                TextField("IP-Adresse, z. B. 192.168.1.40", text: $tv.host)
+                    .frame(maxWidth: 220)
+                if tv.isPaired || !tv.psk.isEmpty {
+                    Label("Gekoppelt", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                }
+            }
+            if tv.awaitingPIN {
+                HStack {
+                    TextField("PIN vom Fernseher", text: $tvPIN)
+                        .frame(maxWidth: 140)
+                        .onSubmit(submitTVPIN)
+                    Button("Bestätigen", action: submitTVPIN)
+                        .disabled(tvPIN.isEmpty || tv.isBusy)
+                }
+            }
+            HStack {
+                Button(tv.isPaired ? "Neu koppeln" : "Mit Fernseher koppeln") {
+                    Task { await tv.startPairing() }
+                }
+                .disabled(!tv.isConfigured || tv.isBusy)
+                Button("Ein/Aus testen") {
+                    Task { await tv.togglePower() }
+                }
+                .disabled(!tv.isConfigured || tv.isBusy)
+                if tv.isPaired {
+                    Button("Kopplung lösen", role: .destructive) { tv.unpair() }
+                }
+            }
+            SecureField("Pre-Shared Key (optional, statt PIN)", text: $tv.psk)
+                .frame(maxWidth: 260)
+            Text(tv.mac.map { "MAC-Adresse: \(WakeOnLAN.format($0))" }
+                 ?? "MAC-Adresse wird gelernt, sobald der Fernseher einmal erreichbar war.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if let status = tv.status {
+                Text(status)
+                    .font(.caption)
+            }
+        }
+    }
+
+    private func submitTVPIN() {
+        let pin = tvPIN
+        tvPIN = ""
+        Task { await tv.finishPairing(pin: pin) }
     }
 
     private func chooseWallpaper() {

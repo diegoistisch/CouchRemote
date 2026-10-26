@@ -51,6 +51,8 @@ public enum ClientMessage: Codable, Equatable, Sendable {
     case setApps([HomeApp])
     /// In einer App suchen (öffnet deren Suchseite mit dem Begriff).
     case search(appID: UUID, query: String)
+    /// Fernseher ein- bzw. ausschalten (der Mac fragt den aktuellen Zustand selbst ab).
+    case tvPower
 }
 
 /// Nachrichten Mac → iPhone.
@@ -67,6 +69,8 @@ public enum ServerMessage: Codable, Equatable, Sendable {
     case fastChannel(port: UInt16, session: UInt64, key: Data)
     /// Das erste gültige UDP-Paket ist angekommen: ab jetzt Trackpad über UDP.
     case fastChannelConfirmed
+    /// Ergebnis von `tvPower`, z. B. „Fernseher aus“ (kurz am iPhone anzeigen).
+    case tvStatus(String)
 }
 
 public enum RemoteProtocol {
