@@ -3,9 +3,10 @@ import ApplicationServices
 
 /// Drückt im Browser den Knopf „Opening überspringen“ (Crunchyroll), „Skip Intro“ usw.
 ///
-/// Sucht über die Bedienungshilfen in den Browserfenstern nach einem kurzen Text mit
-/// „überspringen“ bzw. „skip“ innerhalb der Webseite. Das reicht auch in den Iframe des
-/// Players hinein und braucht keine Einstellung im Browser (anders als JavaScript per AppleScript).
+/// 1. In Chrome und Safari per JavaScript (AppleScript). Nötig, weil Crunchyroll den Knopf mit
+///    `aria-hidden` vor den Bedienungshilfen versteckt. Braucht im Browser einmal
+///    „JavaScript von Apple Events erlauben“ (Chrome: Darstellen → Entwickler).
+/// 2. Sonst über die Bedienungshilfen: kurzer Text mit „überspringen“ bzw. „skip“ in der Webseite.
 /// Läuft nicht auf dem Main-Thread.
 enum SkipButtonPresser {
     /// Wörter, an denen der Knopf erkannt wird (kleingeschrieben).
@@ -36,13 +37,19 @@ enum SkipButtonPresser {
     static func press() -> String {
         guard InputInjector.hasAccessibility(prompt: false) else { return "Bedienungshilfen fehlen am Mac" }
 
+        let script = pressViaJavaScript()
+        if case .pressed(let label) = script { return "„\(label)“ gedrückt" }
+
         let deadline = Date().addingTimeInterval(timeBudget)
         var candidate: Candidate?
         for app in candidateApps() {
             candidate = find(in: app, deadline: deadline)
             if candidate != nil || Date() > deadline { break }
         }
-        guard let candidate else { return "Kein Überspringen-Knopf zu sehen" }
+        guard let candidate else {
+            if case .failed(let hint) = script { return hint }
+            return "Kein Überspringen-Knopf zu sehen"
+        }
 
         if !candidate.isButton || AXUIElementPerformAction(candidate.element, kAXPressAction as CFString) != .success {
             // Echter Klick trifft nur, wenn das Fenster vorne liegt.
@@ -165,6 +172,81 @@ enum SkipButtonPresser {
         AXValueGetValue(positionValue as! AXValue, .cgPoint, &position)
         AXValueGetValue(sizeValue as! AXValue, .cgSize, &size)
         return CGRect(origin: position, size: size)
+    }
+
+    // MARK: - JavaScript
+
+    private enum ScriptResult {
+        case pressed(String)
+        case notFound
+        case failed(String)
+    }
+
+    /// Sucht den Knopf in allen Dokumenten (auch gleich-originigen Iframes), klickt ihn und gibt
+    /// seine Beschriftung zurück (leer = nicht gefunden). Ohne doppelte Anführungszeichen und
+    /// Backslashes, damit es unverändert in einen AppleScript-String passt.
+    private static let javaScript = """
+    (() => {
+      const words = ['überspringen', 'skip'], preferred = ['opening', 'intro', 'vorspann'];
+      const docs = [document];
+      for (const frame of document.querySelectorAll('iframe')) {
+        try { if (frame.contentDocument) docs.push(frame.contentDocument); } catch (e) {}
+      }
+      const found = [];
+      for (const doc of docs) {
+        for (const button of doc.querySelectorAll('button, [role=button]')) {
+          const text = (button.getAttribute('aria-label') || button.textContent || '').trim();
+          const lower = text.toLowerCase();
+          if (!text || text.length > 40 || !words.some(w => lower.includes(w))) continue;
+          const rect = button.getBoundingClientRect();
+          if (rect.width < 4 || rect.height < 4) continue;
+          found.push([button, text]);
+        }
+      }
+      const hit = found.find(([, t]) => preferred.some(p => t.toLowerCase().includes(p))) || found[0];
+      if (!hit) return '';
+      hit[0].click();
+      return hit[1];
+    })()
+    """
+
+    /// Aktiver Tab jedes Fensters der laufenden Browser (Browser werden nicht gestartet).
+    private static func pressViaJavaScript() -> ScriptResult {
+        let running = Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier))
+        var failure: String?
+
+        for (bundleID, name, command) in [
+            ("com.google.Chrome", "Chrome", "execute (active tab of w) javascript js"),
+            ("com.apple.Safari", "Safari", "do JavaScript js in (current tab of w)")
+        ] where running.contains(bundleID) {
+            let source = """
+            set js to "\(javaScript)"
+            tell application id "\(bundleID)"
+              repeat with w in windows
+                set r to \(command)
+                if r is not missing value and r is not "" then return r
+              end repeat
+            end tell
+            return ""
+            """
+            // NSAppleScript nur auf dem Main-Thread benutzen.
+            let (label, error) = DispatchQueue.main.sync { () -> (String?, (number: Int, message: String)?) in
+                var info: NSDictionary?
+                let result = NSAppleScript(source: source)?.executeAndReturnError(&info)
+                let error = info.map {
+                    ($0[NSAppleScript.errorNumber] as? Int ?? 0, $0[NSAppleScript.errorMessage] as? String ?? "")
+                }
+                return (result?.stringValue, error)
+            }
+            if let label, !label.isEmpty { return .pressed(label) }
+            if let error {
+                NSLog("CouchHost: JavaScript in \(name) fehlgeschlagen (\(error.number)): \(error.message)")
+                failure = error.number == -1743
+                    ? "CouchHost darf \(name) nicht steuern (Systemeinstellungen → Datenschutz → Automation)"
+                    : "In \(name) „JavaScript von Apple Events erlauben“ einschalten"
+            }
+        }
+        return failure.map(ScriptResult.failed) ?? .notFound
     }
 
     // MARK: - Klicken

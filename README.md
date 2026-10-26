@@ -111,10 +111,16 @@ the Wake-on-LAN packet: it switches the TV on and does nothing if it already is.
 ## Skip intro
 
 The skip button (⏭, next to fullscreen and on the lock-screen remote) presses Crunchyroll's
-"Opening überspringen" button, or any short "… überspringen" / "Skip …" button on the page. CouchHost
-looks for it through the Accessibility API in the frontmost browser window, which also reaches into the
-player's iframe and needs no browser setting. It prefers opening/intro buttons over others (e.g. recap)
-and reports back on the iPhone when no such button is showing.
+"Opening überspringen" button, or any short "… überspringen" / "Skip …" button on the page.
+
+- Chrome and Safari: CouchHost runs a small JavaScript in the active tab of each window via AppleScript.
+  Crunchyroll marks the button `aria-hidden`, so the Accessibility API can't see it. One-time setup:
+  Chrome → View → Developer → "Allow JavaScript from Apple Events" (Safari: Develop menu), and allow
+  CouchHost to control the browser when macOS asks (Privacy & Security → Automation).
+- Otherwise it falls back to the Accessibility API in the browser windows.
+
+Opening/intro buttons are preferred over others (e.g. recap). The iPhone shows what was pressed, or a hint
+when nothing was found or the browser setting is missing.
 
 ## Home screen
 
