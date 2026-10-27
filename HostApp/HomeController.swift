@@ -303,10 +303,13 @@ final class HomeController: ObservableObject {
 
         let window = self.window ?? makeWindow()
         window.setFrame(screen.frame, display: true)
-        window.level = .normal
+        // Über allen anderen Fenstern, auch über Browsern im Vollbild
+        window.level = .floating
         window.alphaValue = 0
-        NSApp.activate()
+        // CouchHost läuft im Hintergrund; das kooperative `activate()` würde hier oft ignoriert
+        NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
         NSApp.presentationOptions = [.hideDock, .hideMenuBar]
 
         isVisible = true
@@ -341,7 +344,7 @@ final class HomeController: ObservableObject {
         window.onEscape = { [weak self] in self?.hide() }
         window.isReleasedWhenClosed = false
         window.backgroundColor = .black
-        window.collectionBehavior = [.moveToActiveSpace]
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.contentView = NSHostingView(rootView: HomeView(home: self))
         self.window = window
         return window
