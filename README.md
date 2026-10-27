@@ -127,12 +127,16 @@ when nothing was found or the browser setting is missing.
 - Opens with the Home button on the screen that currently holds the mouse pointer (on the TV: the only one)
   and closes with Home again or with Escape on a real Mac keyboard.
 - Background: the current desktop picture, or a custom image chosen in the CouchHost window.
-- "Deine Apps": tiles for your apps. Move the pointer over a tile and tap to open it in the default browser.
+- Top left: greeting ("Guten Morgen/Tag/Abend"), a large clock and the date. Top right: pill buttons
+  "Suchen" and "Schreibtisch" (closes the home screen).
+- A translucent bar at the bottom holds one row of app tiles (scrolls sideways when there are many).
+  Move the pointer over a tile and tap to open it in the default browser.
   Opening an app plays a launch animation: the tile grows to fullscreen, the browser opens behind it,
   then the home screen fades out.
 - Quick actions for the selected app (e.g. YouTube subscriptions/history, Crunchyroll watchlist/history,
   Netflix "My List") and in-app search.
-- Apps are managed on the iPhone (grid icon): add, edit, reorder, delete, launch, and set a custom logo
+- Apps are managed on the iPhone (grid icon), shown as a grid of colored tiles: tap to launch, long-press
+  to edit or delete, the sort button switches to a reorderable list. Custom logos can be set
   from Photos. Only http(s) URLs are accepted. The list is stored on the Mac in
   `~/Library/Application Support/CouchHost/apps.json`.
 - Icons are looked up by `IconResolver`: web app manifest (up to 512 px), `apple-touch-icon` / sized
