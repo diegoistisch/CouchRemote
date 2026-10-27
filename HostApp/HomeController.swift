@@ -6,14 +6,34 @@ import SwiftUI
 /// Verwaltet die Startseite: App-Liste (gespeichert), Fokus fürs D-Pad, Suche und das Vollbildfenster.
 @MainActor
 final class HomeController: ObservableObject {
-    nonisolated static let columns = 6
-
     /// Was gerade mit dem D-Pad ausgewählt ist.
     enum Focus: Equatable {
-        case search
+        case pill(Int)
         case app(Int)
         case shortcut(Int)
     }
+
+    /// Kleine Schaltflächen oben rechts.
+    enum Pill: CaseIterable {
+        case search
+        case desktop
+
+        var title: String {
+            switch self {
+            case .search: "Suchen"
+            case .desktop: "Schreibtisch"
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .search: "magnifyingglass"
+            case .desktop: "macwindow"
+            }
+        }
+    }
+
+    static let pills = Pill.allCases
 
     @Published private(set) var apps: [HomeApp] = []
     @Published private(set) var focus: Focus = .app(0)
@@ -173,8 +193,16 @@ final class HomeController: ObservableObject {
         focus = .app(index)
     }
 
-    func focusSearch() {
-        focus = .search
+    func focusPill(_ index: Int) {
+        guard Self.pills.indices.contains(index) else { return }
+        focus = .pill(index)
+    }
+
+    func perform(_ pill: Pill) {
+        switch pill {
+        case .search: requestSearch(for: nil)
+        case .desktop: fadeOut()
+        }
     }
 
     func focusShortcut(_ index: Int) {
@@ -188,35 +216,33 @@ final class HomeController: ObservableObject {
             searchPrompt = nil // jede Taste schließt den Such-Hinweis
             if key == .back || key == .select { return }
         }
-        let columns = Self.columns
+        let pills = Self.pills
 
+        // Aufbau von oben nach unten: Schaltflächen → Schnellzugriff → App-Leiste
         switch focus {
-        case .search:
+        case .pill(let index):
             switch key {
-            case .down where !apps.isEmpty: focusApp(currentAppIndex)
-            case .select: requestSearch(for: nil)
+            case .left: focus = .pill(max(index - 1, 0))
+            case .right: focus = .pill(min(index + 1, pills.count - 1))
+            case .down:
+                if !shortcuts.isEmpty {
+                    focus = .shortcut(0)
+                } else if !apps.isEmpty {
+                    focusApp(currentAppIndex)
+                }
+            case .select: perform(pills[index])
             default: break
             }
 
         case .app(let index):
-            let column = index % columns
-            let lastRow = (apps.count - 1) / columns
             switch key {
-            case .left where column > 0: focusApp(index - 1)
-            case .right where column < columns - 1 && index + 1 < apps.count: focusApp(index + 1)
+            case .left where index > 0: focusApp(index - 1)
+            case .right where index + 1 < apps.count: focusApp(index + 1)
             case .up:
-                if index >= columns {
-                    focusApp(index - columns)
+                if !shortcuts.isEmpty {
+                    focus = .shortcut(0)
                 } else {
-                    focus = .search
-                }
-            case .down:
-                if index + columns < apps.count {
-                    focusApp(index + columns)
-                } else if index / columns < lastRow {
-                    focusApp(apps.count - 1) // in die kürzere letzte Reihe
-                } else if !shortcuts.isEmpty {
-                    focus = .shortcut(min(column, shortcuts.count - 1))
+                    focus = .pill(0)
                 }
             case .select: if apps.indices.contains(index) { open(apps[index]) }
             default: break
@@ -226,7 +252,8 @@ final class HomeController: ObservableObject {
             switch key {
             case .left: focus = .shortcut(max(index - 1, 0))
             case .right: focus = .shortcut(min(index + 1, shortcuts.count - 1))
-            case .up: focusApp(currentAppIndex)
+            case .up: focus = .pill(0)
+            case .down: focusApp(currentAppIndex)
             case .select: if shortcuts.indices.contains(index) { perform(shortcuts[index]) }
             default: break
             }
@@ -272,7 +299,7 @@ final class HomeController: ObservableObject {
 
         loadWallpaper(for: screen)
         searchPrompt = nil
-        focus = apps.isEmpty ? .search : .app(min(currentAppIndex, apps.count - 1))
+        focus = apps.isEmpty ? .pill(0) : .app(min(currentAppIndex, apps.count - 1))
 
         let window = self.window ?? makeWindow()
         window.setFrame(screen.frame, display: true)

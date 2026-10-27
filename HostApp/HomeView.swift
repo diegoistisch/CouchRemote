@@ -1,8 +1,8 @@
 import RemoteKit
 import SwiftUI
 
-/// Startseite im Stil von tvOS: Hintergrundbild, obere Leiste (Start, Suche, Uhrzeit),
-/// „Deine Apps“ als Logo-Kacheln und darunter der Schnellzugriff der gewählten App.
+/// Startseite: Vollbild-Hintergrund, große Uhr mit Begrüßung oben links, Schaltflächen oben rechts,
+/// unten eine Leiste mit App-Kacheln und darüber der Schnellzugriff der gewählten App.
 struct HomeView: View {
     @ObservedObject var home: HomeController
 
@@ -15,7 +15,7 @@ struct HomeView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let metrics = Metrics(size: geo.size, appCount: home.apps.count)
+            let metrics = Metrics(size: geo.size)
 
             ZStack(alignment: .topLeading) {
                 background(size: geo.size)
@@ -69,20 +69,19 @@ struct HomeView: View {
         let tileHeight: CGFloat
         let titleSize: CGFloat
         let barHeight: CGFloat
+        let clockSize: CGFloat
 
-        init(size: CGSize, appCount: Int) {
+        init(size: CGSize) {
             self.size = size
             padding = size.width * 0.045
-            gap = size.width * 0.011
-            sectionGap = size.height * 0.035
-            let columns = CGFloat(HomeController.columns)
-            let rows = CGFloat(max(1, (appCount + HomeController.columns - 1) / HomeController.columns))
-            let byWidth = (size.width - 2 * padding - (columns - 1) * gap) / columns
-            let byHeight = (size.height * 0.42 - (rows - 1) * gap) / rows * 1.7
-            tileWidth = max(min(byWidth, byHeight), 90)
+            gap = size.width * 0.009
+            sectionGap = size.height * 0.03
+            // Etwa sieben Kacheln passen nebeneinander in die Leiste, weitere sind seitlich erreichbar
+            tileWidth = max(size.width * 0.115, 110)
             tileHeight = tileWidth / 1.7
-            titleSize = max(size.height * 0.028, 14)
-            barHeight = max(size.height * 0.055, 34)
+            titleSize = max(size.height * 0.026, 14)
+            barHeight = max(size.height * 0.05, 32)
+            clockSize = max(size.height * 0.17, 64)
         }
     }
 
@@ -90,27 +89,26 @@ struct HomeView: View {
 
     private func content(_ m: Metrics) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            topBar(m)
-                .padding(.bottom, m.sectionGap)
-
-            sectionTitle("Deine Apps", m)
-
-            if home.apps.isEmpty {
-                emptyState(m)
-            } else {
-                appGrid(m)
+            HStack(alignment: .top) {
+                clock(m)
+                Spacer(minLength: m.padding)
+                pills(m)
             }
+
+            Spacer(minLength: m.sectionGap)
 
             if let app = home.currentApp, !home.shortcuts.isEmpty {
                 sectionTitle("\(app.name) · Schnellzugriff", m)
-                    .padding(.top, m.sectionGap)
                 shortcutRow(m)
+                    .padding(.bottom, m.sectionGap)
             }
 
-            Spacer(minLength: 0)
+            dock(m)
         }
         .padding(.horizontal, m.padding)
-        .padding(.top, m.padding * 0.6)
+        .padding(.top, m.padding * 0.7)
+        .padding(.bottom, m.padding * 0.6)
+        .frame(width: m.size.width, height: m.size.height, alignment: .topLeading)
     }
 
     // MARK: - Hintergrund
@@ -124,82 +122,130 @@ struct HomeView: View {
                     .scaledToFill()
                     .frame(width: size.width, height: size.height)
                     .clipped()
-                    .blur(radius: 2)
             } else {
-                LinearGradient(colors: [Color(red: 0.1, green: 0.13, blue: 0.22), .black],
-                               startPoint: .top, endPoint: .bottom)
+                LinearGradient(colors: [Color(red: 0.16, green: 0.24, blue: 0.3),
+                                        Color(red: 0.1, green: 0.13, blue: 0.22), .black],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
             }
-            // Abdunkeln für Lesbarkeit: oben leicht, unten stärker
-            LinearGradient(colors: [.black.opacity(0.45), .black.opacity(0.2), .black.opacity(0.7)],
+            // Das Bild soll wirken: nur oben links (Uhr) und unten (App-Leiste) abdunkeln
+            LinearGradient(colors: [.black.opacity(0.4), .clear, .clear, .black.opacity(0.55)],
                            startPoint: .top, endPoint: .bottom)
+            LinearGradient(colors: [.black.opacity(0.3), .clear],
+                           startPoint: .leading, endPoint: .center)
         }
         .frame(width: size.width, height: size.height)
     }
 
-    // MARK: - Obere Leiste
+    // MARK: - Uhr und Begrüßung
 
-    private func topBar(_ m: Metrics) -> some View {
-        HStack(spacing: m.barHeight * 0.5) {
-            Text("Start")
-                .font(.system(size: m.barHeight * 0.4, weight: .semibold))
-                .padding(.horizontal, m.barHeight * 0.6)
-                .frame(height: m.barHeight * 0.8)
-                .background(Capsule().fill(.white.opacity(0.2)))
-                .padding(m.barHeight * 0.1)
-                .background(Capsule().fill(.ultraThinMaterial))
-
-            Spacer()
-
-            let searchFocused = home.focus == .search
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: m.barHeight * 0.42, weight: .semibold))
-                .foregroundStyle(searchFocused ? Color.black : Color.white)
-                .frame(width: m.barHeight, height: m.barHeight)
-                .background(Circle().fill(searchFocused ? AnyShapeStyle(Color.white) : AnyShapeStyle(.ultraThinMaterial)))
-                .scaleEffect(searchFocused ? 1.12 : 1)
-                .shadow(color: searchFocused ? .white.opacity(0.5) : .clear, radius: 12)
-                .onHover { if $0 { home.focusSearch() } }
-                .onTapGesture { home.requestSearch(for: nil) }
-
-            TimelineView(.everyMinute) { context in
+    private func clock(_ m: Metrics) -> some View {
+        TimelineView(.everyMinute) { context in
+            VStack(alignment: .leading, spacing: 0) {
+                Text(Self.greeting(for: context.date))
+                    .font(.system(size: m.titleSize * 1.05, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.85))
                 Text(context.date, format: .dateTime.hour().minute())
-                    .font(.system(size: m.barHeight * 0.5, weight: .medium, design: .rounded))
+                    .font(.system(size: m.clockSize, weight: .thin))
                     .monospacedDigit()
+                    .foregroundStyle(.white)
+                    // Ziffern stehen bei großer, dünner Schrift sonst sehr weit vom Text darüber ab
+                    .padding(.vertical, -m.clockSize * 0.1)
+                Text(context.date, format: .dateTime.weekday(.wide).day().month(.wide))
+                    .font(.system(size: m.titleSize * 1.05, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.75))
+            }
+            .shadow(color: .black.opacity(0.35), radius: 12)
+        }
+        .environment(\.locale, Locale(identifier: "de_DE"))
+    }
+
+    static func greeting(for date: Date) -> String {
+        switch Calendar.current.component(.hour, from: date) {
+        case 5..<11: "Guten Morgen"
+        case 11..<17: "Guten Tag"
+        case 17..<22: "Guten Abend"
+        default: "Gute Nacht"
+        }
+    }
+
+    // MARK: - Schaltflächen oben rechts
+
+    private func pills(_ m: Metrics) -> some View {
+        HStack(spacing: m.barHeight * 0.25) {
+            ForEach(Array(HomeController.pills.enumerated()), id: \.offset) { index, pill in
+                let focused = home.focus == .pill(index)
+                Label(pill.title, systemImage: pill.systemImage)
+                    .font(.system(size: m.barHeight * 0.36, weight: .semibold))
+                    .padding(.horizontal, m.barHeight * 0.45)
+                    .frame(height: m.barHeight)
+                    .foregroundStyle(focused ? Color.black : Color.white)
+                    .background(Capsule().fill(focused ? AnyShapeStyle(Color.white) : AnyShapeStyle(.ultraThinMaterial)))
+                    .overlay(Capsule().strokeBorder(.white.opacity(focused ? 0 : 0.15), lineWidth: 1))
+                    .scaleEffect(focused ? 1.08 : 1)
+                    .shadow(color: focused ? .white.opacity(0.4) : .clear, radius: 12)
+                    .onHover { if $0 { home.focusPill(index) } }
+                    .onTapGesture { home.perform(pill) }
             }
         }
-        .foregroundStyle(.white)
     }
 
     private func sectionTitle(_ text: String, _ m: Metrics) -> some View {
         Text(text)
-            .font(.system(size: m.titleSize, weight: .semibold))
-            .foregroundStyle(.white.opacity(0.92))
+            .font(.system(size: m.titleSize * 0.85, weight: .semibold))
+            .foregroundStyle(.white.opacity(0.85))
             .shadow(color: .black.opacity(0.5), radius: 6)
-            .padding(.bottom, m.gap * 1.6)
+            .padding(.bottom, m.gap * 1.4)
     }
 
-    // MARK: - Apps
+    // MARK: - App-Leiste
 
-    private func appGrid(_ m: Metrics) -> some View {
-        LazyVGrid(
-            columns: Array(repeating: GridItem(.fixed(m.tileWidth), spacing: m.gap), count: HomeController.columns),
-            alignment: .leading,
-            spacing: m.gap * 1.3
-        ) {
-            ForEach(Array(home.apps.enumerated()), id: \.element.id) { index, app in
-                HomeTile(app: app, isFocused: home.focus == .app(index),
-                         width: m.tileWidth, height: m.tileHeight)
-                    .background(
-                        GeometryReader { proxy in
-                            Color.clear.preference(key: TileFramesKey.self,
-                                                   value: [app.id: proxy.frame(in: .named(Self.space))])
+    /// Eine Reihe abgerundeter App-Kacheln in einer halbtransparenten Leiste am unteren Rand.
+    private func dock(_ m: Metrics) -> some View {
+        let inset = m.gap * 1.6
+        return Group {
+            if home.apps.isEmpty {
+                emptyState(m)
+                    .padding(inset * 1.5)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: m.gap) {
+                            ForEach(Array(home.apps.enumerated()), id: \.element.id) { index, app in
+                                HomeTile(app: app, isFocused: home.focus == .app(index),
+                                         width: m.tileWidth, height: m.tileHeight)
+                                    .background(
+                                        GeometryReader { geo in
+                                            Color.clear.preference(key: TileFramesKey.self,
+                                                                   value: [app.id: geo.frame(in: .named(Self.space))])
+                                        }
+                                    )
+                                    .opacity(home.launch?.app?.id == app.id ? 0 : 1) // wächst gerade zum Vollbild
+                                    .onHover { if $0 { home.focusApp(index) } }
+                                    .onTapGesture { home.open(app) }
+                                    .id(app.id)
+                            }
                         }
-                    )
-                    .opacity(home.launch?.app?.id == app.id ? 0 : 1) // wächst gerade zum Vollbild
-                    .onHover { if $0 { home.focusApp(index) } }
-                    .onTapGesture { home.open(app) }
+                        // Platz für Vergrößerung und Schein der ausgewählten Kachel
+                        .padding(inset)
+                    }
+                    .onChange(of: home.focus) { _, focus in
+                        guard case .app(let index) = focus, home.apps.indices.contains(index) else { return }
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            proxy.scrollTo(home.apps[index].id, anchor: .center)
+                        }
+                    }
+                }
             }
         }
+        .background(
+            RoundedRectangle(cornerRadius: m.tileHeight * 0.3, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: m.tileHeight * 0.3, style: .continuous)
+                        .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+                )
+        )
     }
 
     private func emptyState(_ m: Metrics) -> some View {
