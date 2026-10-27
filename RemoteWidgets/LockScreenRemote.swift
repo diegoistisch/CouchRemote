@@ -4,4 +4,5 @@ import RemoteKit
 /// `LiveActivityIntent` immer im App-Prozess, in der Widget-Erweiterung passiert nichts.
 enum LockScreenRemote {
     static func press(_ key: RemoteKey) async {}
+    static func toggleTV() async {}
 }

@@ -33,3 +33,16 @@ struct RemoteKeyIntent: LiveActivityIntent {
         return .result()
     }
 }
+
+/// ⏻-Knopf der Live Activity: Fernseher einschalten (Wake-on-LAN über CouchHost).
+struct TVPowerIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Fernseher ein/aus"
+    static var isDiscoverable = false
+
+    init() {}
+
+    func perform() async throws -> some IntentResult {
+        await LockScreenRemote.toggleTV()
+        return .result()
+    }
+}

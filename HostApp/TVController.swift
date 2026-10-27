@@ -18,10 +18,7 @@ final class TVController: ObservableObject {
     private static let clientIDKey = "tvClientID"
 
     @Published var host: String {
-        didSet {
-            UserDefaults.standard.set(host, forKey: Self.hostKey)
-            if host != oldValue { mac = nil } // anderer Fernseher → MAC neu lernen
-        }
+        didSet { UserDefaults.standard.set(host, forKey: Self.hostKey) }
     }
     @Published var psk: String {
         didSet { UserDefaults.standard.set(psk, forKey: Self.pskKey) }
@@ -78,12 +75,22 @@ final class TVController: ObservableObject {
     /// Fragt den Zustand ab und schaltet um. Gibt einen kurzen Text fürs iPhone zurück.
     @discardableResult
     func togglePower() async -> String {
-        guard isConfigured else { return report("Fernseher nicht eingerichtet (siehe CouchHost-Fenster)") }
         isBusy = true
         defer { isBusy = false }
 
+        guard isConfigured else {
+            // Ohne IP-Adresse geht nur Einschalten per Wake-on-LAN (Broadcast an die MAC-Adresse).
+            guard let mac else { return report("Fernseher nicht eingerichtet: IP-Adresse im CouchHost-Fenster eintragen") }
+            sendWakeOnLAN(to: mac)
+            return report("Fernseher wird eingeschaltet")
+        }
+
         let state = try? await powerStatus()
-        if state != nil { await learnMACIfNeeded() }
+        // Auch ein abgelehnter Verbindungsversuch füllt den ARP-Cache → MAC-Adresse lernen
+        await learnMACIfNeeded()
+
+        // Modelle ohne Sony-Web-API (z. B. KD-49XF7005) verraten ihren Zustand nicht zuverlässig
+        // (DLNA antwortet auch im Standby) → unten immer das Weckpaket schicken, das stört nicht, wenn er schon an ist.
 
         if state == "active" {
             do {
@@ -263,6 +270,16 @@ final class TVController: ObservableObject {
 
     // MARK: - Wake-on-LAN
 
+    /// MAC-Adresse von Hand setzen (Feld im CouchHost-Fenster). Leer = wieder automatisch lernen.
+    func setMAC(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty {
+            mac = nil
+        } else if let parsed = WakeOnLAN.parseMAC(trimmed) {
+            mac = parsed
+        }
+    }
+
     /// MAC-Adresse aus dem ARP-Cache lernen, solange der Fernseher erreichbar ist.
     private func learnMACIfNeeded() async {
         guard mac == nil else { return }
@@ -285,7 +302,11 @@ final class TVController: ObservableObject {
         let packet = WakeOnLAN.magicPacket(mac: mac)
         var targets = [in_addr_t(0xFFFF_FFFF)] // 255.255.255.255
         var direct = in_addr()
-        if inet_pton(AF_INET, trimmedHost, &direct) == 1 { targets.append(direct.s_addr) }
+        if inet_pton(AF_INET, trimmedHost, &direct) == 1 {
+            targets.append(direct.s_addr)
+            // Broadcast des eigenen /24-Netzes (z. B. 192.168.0.255), s_addr ist in Netzwerk-Byte-Reihenfolge
+            targets.append((UInt32(bigEndian: direct.s_addr) | 0xFF).bigEndian)
+        }
 
         let fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         guard fd >= 0 else { return }
