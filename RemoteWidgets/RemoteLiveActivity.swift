@@ -51,6 +51,7 @@ struct RemoteLiveActivity: Widget {
                             KeyButton(key: .playPause, systemImage: "playpause.fill", label: "Play/Pause",
                                       prominent: true)
                             KeyButton(key: .volumeUp, systemImage: "speaker.plus", label: "Lauter")
+                            KeyButton(key: .skip, systemImage: "forward.end", label: "Opening überspringen")
                         }
                     }
                 }
@@ -105,6 +106,7 @@ private struct LockScreenView: View {
                     KeyButton(key: .home, systemImage: "house", label: "Home")
                     KeyButton(key: .playPause, systemImage: "playpause.fill", label: "Play/Pause",
                               prominent: true)
+                    KeyButton(key: .skip, systemImage: "forward.end", label: "Opening überspringen")
                 }
                 HStack(spacing: 6) {
                     KeyButton(key: .volumeDown, systemImage: "speaker.minus", label: "Leiser")

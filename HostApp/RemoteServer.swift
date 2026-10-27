@@ -61,6 +61,8 @@ final class RemoteServer: ObservableObject {
 
     // Von der Netzwerk-Queue genutzt:
     private let networkQueue: DispatchQueue
+    /// „Opening überspringen“ suchen und drücken (siehe `SkipButtonPresser`).
+    private let skipQueue = DispatchQueue(label: "at.diego.couchremote.skip", qos: .userInitiated)
     private let injector: InputInjector
     /// Zeigerbewegungen gleichmäßig abspielen (gegen WLAN-Ruckeln).
     private let smoother: PointerSmoother
@@ -342,6 +344,18 @@ final class RemoteServer: ObservableObject {
                 DispatchQueue.main.async { MainActor.assumeIsolated { self.home.toggle() } }
                 return
             }
+            if key == .skip {
+                // Eigene Queue: Die Suche im Bedienungshilfen-Baum kann kurz dauern.
+                skipQueue.async {
+                    let result = SkipButtonPresser.press()
+                    DispatchQueue.main.async {
+                        MainActor.assumeIsolated {
+                            if let client = self.clients[id] { self.send(.notice(result), to: client) }
+                        }
+                    }
+                }
+                return
+            }
             if home.visibility.get(), HomeController.handles(key) {
                 DispatchQueue.main.async { MainActor.assumeIsolated { self.home.handle(key) } }
                 return
@@ -400,7 +414,7 @@ final class RemoteServer: ObservableObject {
         case (.tvPower, .authenticated):
             Task {
                 let result = await tv.togglePower()
-                if let client = clients[id] { send(.tvStatus(result), to: client) }
+                if let client = clients[id] { send(.notice(result), to: client) }
             }
 
         default:

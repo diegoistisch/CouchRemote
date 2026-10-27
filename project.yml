@@ -89,6 +89,7 @@ targets:
         LSApplicationCategoryType: public.app-category.utilities
         NSLocalNetworkUsageDescription: CouchHost empfängt Befehle von deinem iPhone im Heimnetz.
         NSBonjourServices: [_couchremote._tcp]
+        NSAppleEventsUsageDescription: CouchHost drückt im Browser den Knopf „Opening überspringen“.
     entitlements:
       path: HostApp/CouchHost.entitlements
       properties:

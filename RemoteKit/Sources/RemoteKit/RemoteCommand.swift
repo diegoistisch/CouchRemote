@@ -29,6 +29,8 @@ public enum RemoteKey: String, Codable, Sendable, CaseIterable {
     case browserBack
     /// Tastatur: Zeichen links vom Cursor löschen.
     case deleteBackward
+    /// Player: Knopf „Opening überspringen“ (Crunchyroll) bzw. „Skip Intro“ drücken, falls er gerade da ist.
+    case skip
 }
 
 public enum MouseButton: String, Codable, Sendable {
@@ -69,8 +71,8 @@ public enum ServerMessage: Codable, Equatable, Sendable {
     case fastChannel(port: UInt16, session: UInt64, key: Data)
     /// Das erste gültige UDP-Paket ist angekommen: ab jetzt Trackpad über UDP.
     case fastChannelConfirmed
-    /// Ergebnis von `tvPower`, z. B. „Fernseher aus“ (kurz am iPhone anzeigen).
-    case tvStatus(String)
+    /// Kurze Rückmeldung fürs iPhone, z. B. „Fernseher aus“ (nach `tvPower`) oder „Opening übersprungen“.
+    case notice(String)
 }
 
 public enum RemoteProtocol {

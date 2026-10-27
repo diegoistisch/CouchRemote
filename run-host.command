@@ -49,4 +49,6 @@ TEAM="8K6F5K4NXG"
   open "$APP"
   echo "✓ Fertig"
 } 2>&1 | tee run-host.log
-echo "EXIT=${pipestatus[1]}" >> run-host.log
+STATUS=${pipestatus[1]}
+echo "EXIT=$STATUS" >> run-host.log
+exit $STATUS # damit run-all.command bei einem Fehler nicht weitermacht

@@ -26,7 +26,7 @@ final class RemoteCommandTests: XCTestCase {
     func testRoundTripServerMessages() throws {
         let messages: [ServerMessage] = [
             .welcome, .pairingRequired, .pairingFailed(attemptsLeft: 3), .paired(token: "t0k3n"),
-            .apps(HomeApp.defaults), .tvStatus("Fernseher aus")
+            .apps(HomeApp.defaults), .notice("Fernseher aus")
         ]
         for message in messages {
             let data = try RemoteProtocol.encode(message)

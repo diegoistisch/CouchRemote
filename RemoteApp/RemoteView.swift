@@ -10,7 +10,7 @@ struct RemoteView: View {
     var body: some View {
         VStack(spacing: 14) {
             header
-            if let notice = client.tvNotice {
+            if let notice = client.notice {
                 Text(notice)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -173,6 +173,10 @@ struct RemoteView: View {
             RemoteButton(systemImage: "house", label: "Home") { client.send(.key(.home)) }
             RemoteButton(systemImage: "arrow.up.left.and.arrow.down.right", label: "Vollbild") {
                 client.send(.key(.fullscreen))
+            }
+            // Drückt am Mac „Opening überspringen“ (Crunchyroll) bzw. „Skip Intro“, falls er gerade da ist.
+            RemoteButton(systemImage: "forward.end", label: "Opening überspringen") {
+                client.send(.key(.skip))
             }
         }
     }

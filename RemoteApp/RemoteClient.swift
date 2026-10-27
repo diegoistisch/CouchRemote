@@ -43,9 +43,9 @@ final class RemoteClient: ObservableObject {
     @Published var keyboardRequest: KeyboardRequest?
     /// Trackpad läuft über den schnellen UDP-Kanal.
     @Published private(set) var fastActive = false
-    /// Kurze Rückmeldung zum Fernseher-Ein/Aus, z. B. „Fernseher aus“.
-    @Published private(set) var tvNotice: String?
-    private var tvNoticeTask: Task<Void, Never>?
+    /// Kurze Rückmeldung vom Mac, z. B. „Fernseher aus“ oder „Opening übersprungen“.
+    @Published private(set) var notice: String?
+    private var noticeTask: Task<Void, Never>?
 
     var isConnected: Bool { phase == .connected }
 
@@ -219,8 +219,8 @@ final class RemoteClient: ObservableObject {
             fastProbeTimer?.invalidate()
             fastProbeTimer = nil
             fastActive = fastConnection != nil
-        case .tvStatus(let text):
-            showTVNotice(text)
+        case .notice(let text):
+            showNotice(text)
         }
     }
 
@@ -431,17 +431,17 @@ final class RemoteClient: ObservableObject {
 
     func toggleTV() {
         guard isConnected else { return }
-        showTVNotice("Fernseher …")
+        showNotice("Fernseher …")
         sendMessage(.tvPower)
     }
 
-    private func showTVNotice(_ text: String) {
-        tvNotice = text
-        tvNoticeTask?.cancel()
-        tvNoticeTask = Task { [weak self] in
+    private func showNotice(_ text: String) {
+        notice = text
+        noticeTask?.cancel()
+        noticeTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(4))
             guard !Task.isCancelled else { return }
-            self?.tvNotice = nil
+            self?.notice = nil
         }
     }
 

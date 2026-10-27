@@ -108,17 +108,35 @@ Older Linux-based Bravias such as the KD-49XF7005 have no Sony web API, only a D
 port 2870 (which also answers in standby, so it can't tell on from off). There the button always sends
 the Wake-on-LAN packet: it switches the TV on and does nothing if it already is.
 
+## Skip intro
+
+The skip button (⏭, next to fullscreen and on the lock-screen remote) presses Crunchyroll's
+"Opening überspringen" button, or any short "… überspringen" / "Skip …" button on the page.
+
+- Chrome and Safari: CouchHost runs a small JavaScript in the active tab of each window via AppleScript.
+  Crunchyroll marks the button `aria-hidden`, so the Accessibility API can't see it. One-time setup:
+  Chrome → View → Developer → "Allow JavaScript from Apple Events" (Safari: Develop menu), and allow
+  CouchHost to control the browser when macOS asks (Privacy & Security → Automation).
+- Otherwise it falls back to the Accessibility API in the browser windows.
+
+Opening/intro buttons are preferred over others (e.g. recap). The iPhone shows what was pressed, or a hint
+when nothing was found or the browser setting is missing.
+
 ## Home screen
 
 - Opens with the Home button on the screen that currently holds the mouse pointer (on the TV: the only one)
   and closes with Home again or with Escape on a real Mac keyboard.
 - Background: the current desktop picture, or a custom image chosen in the CouchHost window.
-- "Deine Apps": tiles for your apps. Move the pointer over a tile and tap to open it in the default browser.
+- Top left: greeting ("Guten Morgen/Tag/Abend"), a large clock and the date. Top right: pill buttons
+  "Suchen" and "Schreibtisch" (closes the home screen).
+- A translucent bar at the bottom holds one row of app tiles (scrolls sideways when there are many).
+  Move the pointer over a tile and tap to open it in the default browser.
   Opening an app plays a launch animation: the tile grows to fullscreen, the browser opens behind it,
   then the home screen fades out.
 - Quick actions for the selected app (e.g. YouTube subscriptions/history, Crunchyroll watchlist/history,
   Netflix "My List") and in-app search.
-- Apps are managed on the iPhone (grid icon): add, edit, reorder, delete, launch, and set a custom logo
+- Apps are managed on the iPhone (grid icon), shown as a grid of colored tiles: tap to launch, long-press
+  to edit or delete, the sort button switches to a reorderable list. Custom logos can be set
   from Photos. Only http(s) URLs are accepted. The list is stored on the Mac in
   `~/Library/Application Support/CouchHost/apps.json`.
 - Icons are looked up by `IconResolver`: web app manifest (up to 512 px), `apple-touch-icon` / sized
