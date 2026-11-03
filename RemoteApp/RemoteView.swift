@@ -1,14 +1,16 @@
 import SwiftUI
 import RemoteKit
 
-/// Eine einzige Fernbedienungs-Ansicht: großes Trackpad, darunter Player, Navigation und Lautstärke.
+/// Fernbedienung im Stil der Apple-Remote-App (Liquid Glass): oben Einstellungen, Mac-Auswahl und
+/// Power, in der Mitte das große Trackpad, unten Player, Navigation sowie Apps und Tastatur.
 struct RemoteView: View {
     @EnvironmentObject private var client: RemoteClient
     @State private var showsApps = false
+    @State private var showsSettings = false
     @AppStorage(LockScreenRemote.enabledKey) private var lockScreenRemote = true
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 16) {
             header
             if let notice = client.notice {
                 Text(notice)
@@ -17,20 +19,39 @@ struct RemoteView: View {
                     .transition(.opacity)
             }
 
-            VStack(spacing: 14) {
+            VStack(spacing: 18) {
                 TrackpadView()
                     .frame(maxHeight: .infinity)
                 playerRow
                 navigationRow
-                volumeRow
+                appsKeyboardRow
             }
-            // Nur die Bedienelemente sperren, der Header (Mac-Auswahl) bleibt aktiv.
+            // Nur die Bedienelemente sperren, der Header (Mac-Auswahl, Einstellungen) bleibt aktiv.
             .disabled(!client.isConnected)
             .opacity(client.isConnected ? 1 : 0.5)
         }
-        .padding()
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .background(Color.black.ignoresSafeArea())
+        .preferredColorScheme(.dark)
         .sheet(isPresented: pairingSheetBinding) {
             PairingSheet().environmentObject(client)
+        }
+        .sheet(isPresented: $showsApps) {
+            AppsSheet().environmentObject(client)
+        }
+        .sheet(isPresented: $showsSettings) {
+            SettingsSheet().environmentObject(client)
+        }
+        .sheet(item: $client.keyboardRequest) { request in
+            KeyboardSheet(request: request).environmentObject(client)
+        }
+        .onChange(of: lockScreenRemote) { _, enabled in
+            if !enabled {
+                LockScreenRemote.stop()
+            } else if client.isConnected, let mac = client.currentMac {
+                LockScreenRemote.start(macName: mac)
+            }
         }
     }
 
@@ -45,131 +66,113 @@ struct RemoteView: View {
 
     // MARK: - Kopfzeile
 
+    /// Wie bei Apple: runder Knopf links, Auswahl-Pille in der Mitte, Power rechts.
     private var header: some View {
-        HStack {
-            Circle()
-                .fill(client.isConnected ? .green : .orange)
-                .frame(width: 10, height: 10)
-            Text(client.status)
-                .font(.footnote)
-                .lineLimit(1)
-            if client.fastActive {
-                // Trackpad läuft über den schnellen UDP-Kanal
-                Image(systemName: "bolt.fill")
-                    .font(.caption2)
-                    .foregroundStyle(.green)
-                    .accessibilityLabel("Schneller Kanal aktiv")
+        HStack(spacing: 14) {
+            Button {
+                Haptics.tap()
+                showsSettings = true
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 22, weight: .medium))
+                    .frame(width: 58, height: 58)
+                    .glass(in: Circle())
             }
-            Spacer()
+            .buttonStyle(.plain)
+            .accessibilityLabel("Einstellungen")
+
+            macPicker
+
             Button {
                 Haptics.tap()
                 client.toggleTV()
             } label: {
                 Image(systemName: "power")
-                    .font(.title3)
+                    .font(.system(size: 22, weight: .medium))
+                    .frame(width: 58, height: 58)
+                    .glass(in: Circle())
             }
+            .buttonStyle(.plain)
             .accessibilityLabel("Fernseher ein/aus")
             .disabled(!client.isConnected)
-            .padding(.trailing, 8)
-            Button {
-                client.showKeyboard()
-            } label: {
-                Image(systemName: "keyboard")
-                    .font(.title3)
-            }
-            .accessibilityLabel("Tastatur")
-            .disabled(!client.isConnected)
-            .padding(.trailing, 8)
-            Button {
-                showsApps = true
-            } label: {
-                Image(systemName: "square.grid.2x2")
-                    .font(.title3)
-            }
-            .accessibilityLabel("Apps")
-            .disabled(!client.isConnected)
-            .padding(.trailing, 8)
-            Menu {
-                if client.macs.isEmpty {
-                    Text("Kein Mac im Netzwerk gefunden")
-                }
-                ForEach(client.macs) { mac in
-                    Button(mac.name) { client.connect(to: mac) }
-                }
-                Divider()
-                Toggle(isOn: $lockScreenRemote) {
-                    Label("Auf dem Sperrbildschirm", systemImage: "lock.iphone")
-                }
-                if client.isConnected {
-                    Divider()
-                    Button("Trennen") { client.disconnect() }
-                    Button("Kopplung vergessen", role: .destructive) { client.forgetCurrentMac() }
-                }
-            } label: {
-                Image(systemName: "tv")
-                    .font(.title3)
-            }
+            .opacity(client.isConnected ? 1 : 0.5)
         }
-        .sheet(isPresented: $showsApps) {
-            AppsSheet().environmentObject(client)
-        }
-        .sheet(item: $client.keyboardRequest) { request in
-            KeyboardSheet(request: request).environmentObject(client)
-        }
-        .onChange(of: lockScreenRemote) { _, enabled in
-            if !enabled {
-                LockScreenRemote.stop()
-            } else if client.isConnected, let mac = client.currentMac {
-                LockScreenRemote.start(macName: mac)
+    }
+
+    private var macPicker: some View {
+        Menu {
+            if client.macs.isEmpty {
+                Text("Kein Mac im Netzwerk gefunden")
             }
+            ForEach(client.macs) { mac in
+                Button(mac.name) { client.connect(to: mac) }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(client.isConnected ? .green : .orange)
+                    .frame(width: 8, height: 8)
+                Text(client.currentMac ?? "Mac auswählen")
+                    .font(.headline)
+                    .lineLimit(1)
+                if client.fastActive {
+                    // Trackpad läuft über den schnellen UDP-Kanal
+                    Image(systemName: "bolt.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.green)
+                        .accessibilityLabel("Schneller Kanal aktiv")
+                }
+                Image(systemName: "chevron.right")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, minHeight: 58)
+            .glass(in: Capsule())
         }
+        .accessibilityLabel("Mac auswählen")
     }
 
     // MARK: - Bedienelemente
 
     /// Spulen (halten = wiederholen) und Play/Pause in der Mitte.
     private var playerRow: some View {
-        HStack(spacing: 22) {
+        HStack(spacing: 0) {
             RepeatingPress(label: "Zurückspulen") {
                 client.send(.key(.seekBack))
             } content: {
                 Image(systemName: "gobackward")
-                    .font(.system(size: 24, weight: .semibold))
-                    .frame(width: 62, height: 62)
-                    .background(Circle().fill(.quaternary))
+                    .font(.system(size: 24, weight: .medium))
+                    .frame(width: 72, height: 72)
+                    .glass(in: Circle())
             }
-
+            Spacer()
             Button {
                 Haptics.tap()
                 client.send(.key(.playPause))
             } label: {
-                Image(systemName: "playpause.fill")
-                    .font(.system(size: 30, weight: .bold))
-                    .frame(width: 84, height: 84)
-                    .background(Circle().fill(.tint))
-                    .foregroundStyle(.white)
+                Image(systemName: "playpause")
+                    .font(.system(size: 32, weight: .medium))
+                    .frame(width: 104, height: 104)
+                    .glass(in: Circle())
             }
+            .buttonStyle(.plain)
             .accessibilityLabel("Play/Pause")
-
+            Spacer()
             RepeatingPress(label: "Vorspulen") {
                 client.send(.key(.seekForward))
             } content: {
                 Image(systemName: "goforward")
-                    .font(.system(size: 24, weight: .semibold))
-                    .frame(width: 62, height: 62)
-                    .background(Circle().fill(.quaternary))
+                    .font(.system(size: 24, weight: .medium))
+                    .frame(width: 72, height: 72)
+                    .glass(in: Circle())
             }
         }
     }
 
     private var navigationRow: some View {
         HStack(spacing: 12) {
-            // Tippen = Escape (Menü/Vollbild verlassen), Halten = vorherige Seite im Browser.
-            RemoteButton(systemImage: "chevron.backward", label: "Zurück",
-                         longPressLabel: "Seite zurück",
-                         longPressAction: { client.send(.key(.browserBack)) }) {
-                client.send(.key(.back))
-            }
             RemoteButton(systemImage: "house", label: "Home") { client.send(.key(.home)) }
             RemoteButton(systemImage: "arrow.up.left.and.arrow.down.right", label: "Vollbild") {
                 client.send(.key(.fullscreen))
@@ -181,11 +184,91 @@ struct RemoteView: View {
         }
     }
 
-    private var volumeRow: some View {
+    /// Apps und Tastatur sitzen dort, wo früher die Lautstärke war.
+    private var appsKeyboardRow: some View {
         HStack(spacing: 12) {
-            RemoteButton(systemImage: "speaker.minus", label: "Leiser", repeats: true) { client.send(.key(.volumeDown)) }
-            RemoteButton(systemImage: "speaker.slash", label: "Stumm") { client.send(.key(.mute)) }
-            RemoteButton(systemImage: "speaker.plus", label: "Lauter", repeats: true) { client.send(.key(.volumeUp)) }
+            RemoteButton(systemImage: "square.grid.2x2", label: "Apps", title: "Apps") {
+                showsApps = true
+            }
+            RemoteButton(systemImage: "keyboard", label: "Tastatur", title: "Tastatur") {
+                client.showKeyboard()
+            }
+        }
+    }
+}
+
+// MARK: - Einstellungen
+
+struct SettingsSheet: View {
+    @EnvironmentObject private var client: RemoteClient
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("trackpadSensitivity") private var sensitivity = 1.0
+    @AppStorage(LockScreenRemote.enabledKey) private var lockScreenRemote = true
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    HStack {
+                        Circle()
+                            .fill(client.isConnected ? .green : .orange)
+                            .frame(width: 10, height: 10)
+                        Text(client.status)
+                    }
+                    if client.macs.isEmpty {
+                        Text("Kein Mac im Netzwerk gefunden")
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(client.macs) { mac in
+                        Button {
+                            client.connect(to: mac)
+                        } label: {
+                            HStack {
+                                Text(mac.name).foregroundStyle(.primary)
+                                Spacer()
+                                if mac.name == client.currentMac {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Mac")
+                }
+
+                Section {
+                    HStack {
+                        Image(systemName: "tortoise")
+                        Slider(value: $sensitivity, in: 0.4...2.5)
+                        Image(systemName: "hare")
+                    }
+                    .foregroundStyle(.secondary)
+                } header: {
+                    Text("Trackpad-Geschwindigkeit")
+                }
+
+                Section {
+                    Toggle(isOn: $lockScreenRemote) {
+                        Label("Auf dem Sperrbildschirm", systemImage: "lock.iphone")
+                    }
+                } footer: {
+                    Text("Zeigt die Fernbedienung als Live-Aktivität auf dem Sperrbildschirm.")
+                }
+
+                if client.isConnected {
+                    Section {
+                        Button("Trennen") { client.disconnect() }
+                        Button("Kopplung vergessen", role: .destructive) { client.forgetCurrentMac() }
+                    }
+                }
+            }
+            .navigationTitle("Einstellungen")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Fertig") { dismiss() }
+                }
+            }
         }
     }
 }
@@ -253,31 +336,32 @@ struct TrackpadView: View {
     @State private var scrollStripLast: CGFloat?
 
     var body: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 8) {
-                trackpad
-                scrollStrip
-            }
-
-            HStack {
-                Image(systemName: "tortoise")
-                Slider(value: $sensitivity, in: 0.4...2.5)
-                Image(systemName: "hare")
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
+        HStack(spacing: 10) {
+            trackpad
+            scrollStrip
         }
     }
 
     private var trackpad: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 24)
-                .fill(.quaternary)
-            Text("1 Finger: Zeiger · Tippen: Klick\n2 Finger: Scrollen · Tippen: Rechtsklick")
-                .multilineTextAlignment(.center)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            Color.clear
+            if client.isConnected {
+                Text("1 Finger: Zeiger · Tippen: Klick\n2 Finger: Scrollen · Tippen: Rechtsklick")
+                    .multilineTextAlignment(.center)
+                    .font(.footnote)
+                    .foregroundStyle(.tertiary)
+                    .allowsHitTesting(false)
+            } else {
+                // Wie „Suchen …“ bei Apple: solange kein Mac verbunden ist, steht der Status mittig.
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text(client.status.uppercased())
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
                 .allowsHitTesting(false)
+            }
             TrackpadSurface(
                 onMove: move,
                 onScroll: { dx, dy in client.queueScroll(dx: dx * 2, dy: dy * 2) },
@@ -291,20 +375,21 @@ struct TrackpadView: View {
                 }
             )
         }
-        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .glass(in: RoundedRectangle(cornerRadius: 40, style: .continuous), interactive: false)
+        .clipShape(RoundedRectangle(cornerRadius: 40, style: .continuous))
         .accessibilityLabel("Trackpad")
     }
 
     /// Schmale Leiste rechts: 1 Finger hoch/runter = senkrecht scrollen.
     private var scrollStrip: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 18)
-                .fill(.quaternary)
+            Color.clear
             Image(systemName: "arrow.up.and.down")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
         .frame(width: 44)
+        .glass(in: Capsule(), interactive: false)
         .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: 0)
@@ -378,6 +463,8 @@ struct RemoteButton: View {
     var repeats = false
     var longPressLabel: String?
     var longPressAction: (() -> Void)?
+    /// Optionaler Text neben dem Symbol (z. B. „Apps“).
+    var title: String? = nil
     let action: () -> Void
 
     var body: some View {
@@ -412,10 +499,16 @@ struct RemoteButton: View {
     }
 
     private var face: some View {
-        Image(systemName: systemImage)
-            .font(.title3)
-            .frame(maxWidth: .infinity, minHeight: 50)
-            .background(RoundedRectangle(cornerRadius: 14).fill(.quaternary))
+        HStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.title3)
+            if let title {
+                Text(title).font(.headline)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 56)
+        .contentShape(Capsule())
+        .glass(in: Capsule())
     }
 }
 
@@ -426,5 +519,23 @@ enum Haptics {
 
     @MainActor static func longPress() {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+    }
+}
+
+// MARK: - Liquid Glass
+
+extension View {
+    /// Liquid Glass ab iOS 26, sonst ein Material-Hintergrund in derselben Form.
+    @ViewBuilder
+    func glass<S: Shape>(in shape: S, interactive: Bool = true) -> some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            self.glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
+        } else {
+            self.background(.ultraThinMaterial, in: shape)
+        }
+        #else
+        self.background(.ultraThinMaterial, in: shape)
+        #endif
     }
 }
