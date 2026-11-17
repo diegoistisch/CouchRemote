@@ -60,7 +60,7 @@ struct AnimeSheet: View {
             let todayIDs = Set(today.map(\.id))
             let upcoming = AnimeEntry.upcoming(client.anime, at: now).filter { !todayIDs.contains($0.id) }
             let finished = client.anime
-                .filter { $0.isFinished(at: now) }
+                .filter { $0.isFinished(at: now) && !todayIDs.contains($0.id) }
                 .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
 
             List {
