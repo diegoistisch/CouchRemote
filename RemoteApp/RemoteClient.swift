@@ -39,6 +39,8 @@ final class RemoteClient: ObservableObject {
     @Published private(set) var codeError: String?
     /// Apps der Startseite (kommen vom Mac).
     @Published private(set) var apps: [HomeApp] = []
+    /// Animes für „Als Nächstes“ am Fernseher (kommen vom Mac).
+    @Published private(set) var anime: [AnimeEntry] = []
     /// Gesetzt = Tastatur-Sheet ist offen.
     @Published var keyboardRequest: KeyboardRequest?
     /// Trackpad läuft über den schnellen UDP-Kanal.
@@ -211,6 +213,8 @@ final class RemoteClient: ObservableObject {
             markConnected(mac)
         case .apps(let apps):
             self.apps = apps
+        case .anime(let anime):
+            self.anime = anime
         case .showKeyboard(let appID):
             keyboardRequest = KeyboardRequest(appID: appID, preferSearch: true)
         case let .fastChannel(port, session, key):
@@ -477,6 +481,13 @@ final class RemoteClient: ObservableObject {
         guard isConnected else { return }
         apps = newApps
         sendMessage(.setApps(newApps))
+    }
+
+    /// Neue Anime-Liste an den Mac schicken. Lokal sofort übernehmen, der Mac bestätigt mit `.anime`.
+    func setAnime(_ newAnime: [AnimeEntry]) {
+        guard isConnected else { return }
+        anime = newAnime
+        sendMessage(.setAnime(newAnime))
     }
 
     /// Tasten und Klicks: sofort senden.
