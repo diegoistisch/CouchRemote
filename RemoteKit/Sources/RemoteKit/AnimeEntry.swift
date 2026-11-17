@@ -97,6 +97,29 @@ public struct AnimeEntry: Codable, Equatable, Hashable, Identifiable, Sendable {
             .sorted { $0.date == $1.date ? $0.entry.title < $1.entry.title : $0.date < $1.date }
     }
 
+    /// Folge, die an diesem Tag erscheint (schon draußen oder noch ausständig). `nil`, wenn heute nichts kommt.
+    public func release(on day: Date, now: Date = Date(), calendar: Calendar = .current) -> UpcomingRelease? {
+        guard calendar.component(.weekday, from: day) == weekday,
+              let date = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day) else { return nil }
+        if date > now {
+            guard let next = nextRelease(at: now, calendar: calendar), next.date == date else { return nil }
+            return UpcomingRelease(entry: self, episode: next.episode, date: date)
+        }
+        // Schon erschienen: nur, wenn dieser Termin wirklich eine Folge weitergezählt hat
+        // (nicht, wenn der Anime erst danach eingetragen wurde oder schon fertig war).
+        let episode = airedEpisode(at: date, calendar: calendar)
+        guard episode > airedEpisode(at: date.addingTimeInterval(-1), calendar: calendar) else { return nil }
+        return UpcomingRelease(entry: self, episode: episode, date: date)
+    }
+
+    /// Alles, was heute erscheint oder schon erschienen ist, nach Uhrzeit sortiert.
+    public static func today(_ entries: [AnimeEntry], at now: Date = Date(),
+                             calendar: Calendar = .current) -> [UpcomingRelease] {
+        entries
+            .compactMap { $0.release(on: now, now: now, calendar: calendar) }
+            .sorted { $0.date == $1.date ? $0.entry.title < $1.entry.title : $0.date < $1.date }
+    }
+
     // MARK: - Texte
 
     private static let germanLocale = Locale(identifier: "de_DE")
@@ -159,4 +182,7 @@ public struct UpcomingRelease: Identifiable, Equatable, Sendable {
     public let date: Date
 
     public var id: UUID { entry.id }
+
+    /// Ist die Folge zum Zeitpunkt `now` schon draußen?
+    public func isOut(at now: Date = Date()) -> Bool { date <= now }
 }

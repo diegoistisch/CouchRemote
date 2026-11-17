@@ -196,41 +196,57 @@ struct HomeView: View {
 
     /// Wie viele Animes höchstens in der Liste stehen (der Rest als „+ n weitere“).
     private static let upNextLimit = 5
+    /// Akzentfarbe für alles, was heute erscheint.
+    private static let todayColor = Color(red: 1.0, green: 0.58, blue: 0.16)
 
-    /// Liste unter den Schaltflächen: welche Anime-Folge als Nächstes erscheint und wann.
-    /// Wird vom iPhone befüllt („Anime“), ohne Einträge bleibt sie weg.
+    /// Liste unter den Schaltflächen: oben hervorgehoben, was heute erscheint (oder schon erschienen ist),
+    /// darunter die nächsten Folgen. Wird vom iPhone befüllt („Anime“), ohne Einträge bleibt sie weg.
     @ViewBuilder
     private func upNext(_ m: Metrics) -> some View {
         if !home.anime.isEmpty {
             TimelineView(.everyMinute) { context in
-                let releases = AnimeEntry.upcoming(home.anime, at: context.date)
-                if !releases.isEmpty {
-                    upNextPanel(releases, now: context.date, m)
+                let today = AnimeEntry.today(home.anime, at: context.date)
+                let todayIDs = Set(today.map(\.id))
+                let later = AnimeEntry.upcoming(home.anime, at: context.date).filter { !todayIDs.contains($0.id) }
+                if !today.isEmpty || !later.isEmpty {
+                    upNextPanel(today: today, later: later, now: context.date, m)
                 }
             }
         }
     }
 
-    private func upNextPanel(_ releases: [UpcomingRelease], now: Date, _ m: Metrics) -> some View {
+    private func upNextPanel(today: [UpcomingRelease], later: [UpcomingRelease], now: Date,
+                             _ m: Metrics) -> some View {
         let rowFont = m.titleSize * 0.82
-        let shown = releases.prefix(Self.upNextLimit)
+        let shownToday = Array(today.prefix(4))
+        let shownLater = Array(later.prefix(max(Self.upNextLimit - shownToday.count, 2)))
+        let hidden = today.count + later.count - shownToday.count - shownLater.count
         return VStack(alignment: .leading, spacing: 0) {
-            Label("Als Nächstes", systemImage: "calendar.badge.clock")
-                .font(.system(size: m.titleSize * 0.72, weight: .semibold))
-                .textCase(.uppercase)
-                .foregroundStyle(.white.opacity(0.6))
-                .padding(.bottom, rowFont * 0.55)
-
-            ForEach(Array(shown.enumerated()), id: \.element.id) { index, release in
-                if index > 0 {
-                    Divider().overlay(.white.opacity(0.12))
+            if !shownToday.isEmpty {
+                panelHeader(today.count == 1 ? "Heute · 1 neue Folge" : "Heute · \(today.count) neue Folgen",
+                            systemImage: "sparkles", color: Self.todayColor, font: rowFont)
+                VStack(spacing: rowFont * 0.4) {
+                    ForEach(shownToday) { release in
+                        todayRow(release, now: now, font: rowFont)
+                    }
                 }
-                upNextRow(release, now: now, font: rowFont)
-                    .padding(.vertical, rowFont * 0.45)
             }
 
-            if releases.count > shown.count {
-                Text("+ \(releases.count - shown.count) weitere")
+            if !shownLater.isEmpty {
+                panelHeader("Als Nächstes", systemImage: "calendar.badge.clock",
+                            color: .white.opacity(0.6), font: rowFont)
+                    .padding(.top, shownToday.isEmpty ? 0 : rowFont * 0.9)
+                ForEach(Array(shownLater.enumerated()), id: \.element.id) { index, release in
+                    if index > 0 {
+                        Divider().overlay(.white.opacity(0.12))
+                    }
+                    upNextRow(release, now: now, font: rowFont)
+                        .padding(.vertical, rowFont * 0.45)
+                }
+            }
+
+            if hidden > 0 {
+                Text("+ \(hidden) weitere")
                     .font(.system(size: rowFont * 0.75, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
                     .padding(.top, rowFont * 0.3)
@@ -244,15 +260,82 @@ struct HomeView: View {
                 .fill(.ultraThinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: rowFont * 0.9, style: .continuous)
-                        .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+                        .strokeBorder(today.isEmpty ? Color.white.opacity(0.12) : Self.todayColor.opacity(0.45),
+                                      lineWidth: today.isEmpty ? 1 : 1.5)
                 )
         )
-        .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
+        .shadow(color: today.isEmpty ? .black.opacity(0.25) : Self.todayColor.opacity(0.25), radius: 16, y: 6)
         .transition(.opacity)
     }
 
+    private func panelHeader(_ text: String, systemImage: String, color: Color, font: CGFloat) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(.system(size: font * 0.85, weight: .bold))
+            .textCase(.uppercase)
+            .foregroundStyle(color)
+            .padding(.bottom, font * 0.55)
+    }
+
+    /// Hervorgehobene Zeile für eine Folge von heute: farbige Karte, Uhrzeit groß,
+    /// „NEU“-Abzeichen, sobald sie draußen ist.
+    private func todayRow(_ release: UpcomingRelease, now: Date, font: CGFloat) -> some View {
+        let isOut = release.isOut(at: now)
+        let time = String(format: "%02d:%02d", release.entry.hour, release.entry.minute)
+        return HStack(alignment: .center, spacing: font * 0.7) {
+            VStack(alignment: .leading, spacing: font * 0.12) {
+                Text(release.entry.title)
+                    .font(.system(size: font * 1.05, weight: .bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text("Folge \(release.episode) von \(release.entry.totalEpisodes)")
+                    .font(.system(size: font * 0.72, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .monospacedDigit()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(alignment: .trailing, spacing: font * 0.15) {
+                if isOut {
+                    Text("NEU")
+                        .font(.system(size: font * 0.7, weight: .heavy))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, font * 0.45)
+                        .padding(.vertical, font * 0.12)
+                        .background(Capsule().fill(Self.todayColor))
+                    Text("seit \(time)")
+                        .font(.system(size: font * 0.68, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .monospacedDigit()
+                } else {
+                    Text(time)
+                        .font(.system(size: font * 1.0, weight: .bold))
+                        .foregroundStyle(Self.todayColor)
+                        .monospacedDigit()
+                    if let countdown = AnimeEntry.countdown(to: release.date, now: now) {
+                        Text(countdown)
+                            .font(.system(size: font * 0.68, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                }
+            }
+            .fixedSize()
+        }
+        .padding(.horizontal, font * 0.6)
+        .padding(.vertical, font * 0.5)
+        .background(
+            RoundedRectangle(cornerRadius: font * 0.6, style: .continuous)
+                .fill(Self.todayColor.opacity(isOut ? 0.16 : 0.24))
+        )
+        .overlay(alignment: .leading) {
+            // Farbiger Streifen links, wie ein Lesezeichen
+            Capsule()
+                .fill(Self.todayColor)
+                .frame(width: font * 0.16)
+                .padding(.vertical, font * 0.35)
+        }
+    }
+
     private func upNextRow(_ release: UpcomingRelease, now: Date, font: CGFloat) -> some View {
-        let isToday = Calendar.current.isDate(release.date, inSameDayAs: now)
         let countdown = AnimeEntry.countdown(to: release.date, now: now)
         return HStack(alignment: .center, spacing: font * 0.7) {
             VStack(alignment: .leading, spacing: font * 0.12) {
@@ -270,7 +353,7 @@ struct HomeView: View {
             VStack(alignment: .trailing, spacing: font * 0.12) {
                 Text(AnimeEntry.releaseLabel(for: release.date, now: now))
                     .font(.system(size: font * 0.8, weight: .semibold))
-                    .foregroundStyle(isToday ? Color.orange : .white.opacity(0.9))
+                    .foregroundStyle(.white.opacity(0.9))
                     .monospacedDigit()
                     .lineLimit(1)
                 if let countdown {

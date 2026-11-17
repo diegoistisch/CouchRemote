@@ -56,12 +56,56 @@ struct AnimeSheet: View {
                     .buttonStyle(.borderedProminent)
             }
         } else {
-            let upcoming = AnimeEntry.upcoming(client.anime, at: now)
+            let today = AnimeEntry.today(client.anime, at: now)
+            let todayIDs = Set(today.map(\.id))
+            let upcoming = AnimeEntry.upcoming(client.anime, at: now).filter { !todayIDs.contains($0.id) }
             let finished = client.anime
                 .filter { $0.isFinished(at: now) }
                 .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
 
             List {
+                if !today.isEmpty {
+                    Section {
+                        ForEach(today) { release in
+                            let isOut = release.isOut(at: now)
+                            row(release.entry, now: now) {
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    if isOut {
+                                        Text("NEU")
+                                            .font(.caption.weight(.heavy))
+                                            .foregroundStyle(.black)
+                                            .padding(.horizontal, 7)
+                                            .padding(.vertical, 2)
+                                            .background(Capsule().fill(Color.orange))
+                                        Text("seit \(String(format: "%02d:%02d", release.entry.hour, release.entry.minute))")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    } else {
+                                        Text(String(format: "%02d:%02d", release.entry.hour, release.entry.minute))
+                                            .font(.headline)
+                                            .foregroundStyle(.orange)
+                                        if let countdown = AnimeEntry.countdown(to: release.date, now: now) {
+                                            Text(countdown)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                }
+                            } subtitle: {
+                                Text("Folge \(release.episode) von \(release.entry.totalEpisodes)")
+                            }
+                            .listRowBackground(Color.orange.opacity(isOut ? 0.12 : 0.2))
+                        }
+                        .onDelete { offsets in
+                            delete(offsets.map { today[$0].entry.id })
+                        }
+                    } header: {
+                        Label(today.count == 1 ? "Heute · 1 neue Folge" : "Heute · \(today.count) neue Folgen",
+                              systemImage: "sparkles")
+                            .foregroundStyle(.orange)
+                    }
+                }
+
                 if !upcoming.isEmpty {
                     Section {
                         ForEach(upcoming) { release in
@@ -69,8 +113,7 @@ struct AnimeSheet: View {
                                 VStack(alignment: .trailing, spacing: 2) {
                                     Text(AnimeEntry.releaseLabel(for: release.date, now: now))
                                         .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(Calendar.current.isDate(release.date, inSameDayAs: now)
-                                                         ? Color.orange : .primary)
+                                        .foregroundStyle(.primary)
                                     if let countdown = AnimeEntry.countdown(to: release.date, now: now) {
                                         Text(countdown)
                                             .font(.caption)
