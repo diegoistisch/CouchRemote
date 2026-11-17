@@ -68,10 +68,18 @@ final class AnimeEntryTests: XCTestCase {
         let after = AnimeEntry.today([anime], at: date(2026, 11, 17, 20), calendar: calendar)
         XCTAssertEqual(after.first?.episode, 6)
         XCTAssertEqual(after.first?.isOut(at: date(2026, 11, 17, 20)), true)
-        // Erst nach dem Termin eingetragen: zählt nicht als heute erschienen
+        // Erst nach dem Termin eingetragen (Folge 6 ist die von heute): bleibt trotzdem bis Mitternacht stehen
         var late = anime
+        late.currentEpisode = 6
         late.updatedAt = date(2026, 11, 17, 18)
-        XCTAssertTrue(AnimeEntry.today([late], at: date(2026, 11, 17, 20), calendar: calendar).isEmpty)
+        let lateToday = AnimeEntry.today([late], at: date(2026, 11, 17, 20), calendar: calendar)
+        XCTAssertEqual(lateToday.first?.episode, 6)
+        XCTAssertEqual(lateToday.first?.isOut(at: date(2026, 11, 17, 20)), true)
+        // Am nächsten Tag ist sie aus „Heute“ verschwunden
+        XCTAssertTrue(AnimeEntry.today([late], at: date(2026, 11, 18, 10), calendar: calendar).isEmpty)
+        // Letzte Folge heute erschienen: bleibt auch stehen
+        let finale = tuesdayAnime(current: 11, total: 12)
+        XCTAssertEqual(AnimeEntry.today([finale], at: date(2026, 11, 17, 23), calendar: calendar).first?.episode, 12)
     }
 
     func testLabels() {

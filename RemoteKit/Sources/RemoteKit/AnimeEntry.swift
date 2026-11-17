@@ -105,11 +105,17 @@ public struct AnimeEntry: Codable, Equatable, Hashable, Identifiable, Sendable {
             guard let next = nextRelease(at: now, calendar: calendar), next.date == date else { return nil }
             return UpcomingRelease(entry: self, episode: next.episode, date: date)
         }
-        // Schon erschienen: nur, wenn dieser Termin wirklich eine Folge weitergezählt hat
-        // (nicht, wenn der Anime erst danach eingetragen wurde oder schon fertig war).
+        // Schon erschienen: Die Folge bleibt bis Mitternacht in „Heute“ stehen.
         let episode = airedEpisode(at: date, calendar: calendar)
-        guard episode > airedEpisode(at: date.addingTimeInterval(-1), calendar: calendar) else { return nil }
-        return UpcomingRelease(entry: self, episode: episode, date: date)
+        if episode > airedEpisode(at: date.addingTimeInterval(-1), calendar: calendar) {
+            return UpcomingRelease(entry: self, episode: episode, date: date)
+        }
+        // Erst nach dem heutigen Termin eingetragen oder bearbeitet: Dann ist die eingetragene
+        // Folge die von heute (wöchentlicher Rhythmus), sie soll trotzdem als „heute erschienen“ gelten.
+        if currentEpisode >= 1, updatedAt >= date, calendar.isDate(updatedAt, inSameDayAs: date) {
+            return UpcomingRelease(entry: self, episode: currentEpisode, date: date)
+        }
+        return nil
     }
 
     /// Alles, was heute erscheint oder schon erschienen ist, nach Uhrzeit sortiert.
