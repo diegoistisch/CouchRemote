@@ -6,6 +6,7 @@ import RemoteKit
 struct RemoteView: View {
     @EnvironmentObject private var client: RemoteClient
     @State private var showsApps = false
+    @State private var showsAnime = false
     @State private var showsSettings = false
     @AppStorage(LockScreenRemote.enabledKey) private var lockScreenRemote = true
 
@@ -39,6 +40,9 @@ struct RemoteView: View {
         }
         .sheet(isPresented: $showsApps) {
             AppsSheet().environmentObject(client)
+        }
+        .sheet(isPresented: $showsAnime) {
+            AnimeSheet().environmentObject(client)
         }
         .sheet(isPresented: $showsSettings) {
             SettingsSheet().environmentObject(client)
@@ -184,11 +188,14 @@ struct RemoteView: View {
         }
     }
 
-    /// Apps und Tastatur sitzen dort, wo früher die Lautstärke war.
+    /// Apps, Anime-Liste und Tastatur sitzen dort, wo früher die Lautstärke war.
     private var appsKeyboardRow: some View {
         HStack(spacing: 12) {
             RemoteButton(systemImage: "square.grid.2x2", label: "Apps", title: "Apps") {
                 showsApps = true
+            }
+            RemoteButton(systemImage: "calendar.badge.clock", label: "Anime", title: "Anime") {
+                showsAnime = true
             }
             RemoteButton(systemImage: "keyboard", label: "Tastatur", title: "Tastatur") {
                 client.showKeyboard()

@@ -92,7 +92,10 @@ struct HomeView: View {
             HStack(alignment: .top) {
                 clock(m)
                 Spacer(minLength: m.padding)
-                pills(m)
+                VStack(alignment: .trailing, spacing: m.sectionGap * 0.8) {
+                    pills(m)
+                    upNext(m)
+                }
             }
 
             Spacer(minLength: m.sectionGap)
@@ -186,6 +189,98 @@ struct HomeView: View {
                     .onHover { if $0 { home.focusPill(index) } }
                     .onTapGesture { home.perform(pill) }
             }
+        }
+    }
+
+    // MARK: - Als Nächstes (Anime)
+
+    /// Wie viele Animes höchstens in der Liste stehen (der Rest als „+ n weitere“).
+    private static let upNextLimit = 5
+
+    /// Liste unter den Schaltflächen: welche Anime-Folge als Nächstes erscheint und wann.
+    /// Wird vom iPhone befüllt („Anime“), ohne Einträge bleibt sie weg.
+    @ViewBuilder
+    private func upNext(_ m: Metrics) -> some View {
+        if !home.anime.isEmpty {
+            TimelineView(.everyMinute) { context in
+                let releases = AnimeEntry.upcoming(home.anime, at: context.date)
+                if !releases.isEmpty {
+                    upNextPanel(releases, now: context.date, m)
+                }
+            }
+        }
+    }
+
+    private func upNextPanel(_ releases: [UpcomingRelease], now: Date, _ m: Metrics) -> some View {
+        let rowFont = m.titleSize * 0.82
+        let shown = releases.prefix(Self.upNextLimit)
+        return VStack(alignment: .leading, spacing: 0) {
+            Label("Als Nächstes", systemImage: "calendar.badge.clock")
+                .font(.system(size: m.titleSize * 0.72, weight: .semibold))
+                .textCase(.uppercase)
+                .foregroundStyle(.white.opacity(0.6))
+                .padding(.bottom, rowFont * 0.55)
+
+            ForEach(Array(shown.enumerated()), id: \.element.id) { index, release in
+                if index > 0 {
+                    Divider().overlay(.white.opacity(0.12))
+                }
+                upNextRow(release, now: now, font: rowFont)
+                    .padding(.vertical, rowFont * 0.45)
+            }
+
+            if releases.count > shown.count {
+                Text("+ \(releases.count - shown.count) weitere")
+                    .font(.system(size: rowFont * 0.75, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .padding(.top, rowFont * 0.3)
+            }
+        }
+        .padding(.horizontal, rowFont * 1.0)
+        .padding(.vertical, rowFont * 0.85)
+        .frame(width: max(m.size.width * 0.3, 320), alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: rowFont * 0.9, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: rowFont * 0.9, style: .continuous)
+                        .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+                )
+        )
+        .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
+        .transition(.opacity)
+    }
+
+    private func upNextRow(_ release: UpcomingRelease, now: Date, font: CGFloat) -> some View {
+        let isToday = Calendar.current.isDate(release.date, inSameDayAs: now)
+        let countdown = AnimeEntry.countdown(to: release.date, now: now)
+        return HStack(alignment: .center, spacing: font * 0.7) {
+            VStack(alignment: .leading, spacing: font * 0.12) {
+                Text(release.entry.title)
+                    .font(.system(size: font, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text("Folge \(release.episode) von \(release.entry.totalEpisodes)")
+                    .font(.system(size: font * 0.72, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .monospacedDigit()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(alignment: .trailing, spacing: font * 0.12) {
+                Text(AnimeEntry.releaseLabel(for: release.date, now: now))
+                    .font(.system(size: font * 0.8, weight: .semibold))
+                    .foregroundStyle(isToday ? Color.orange : .white.opacity(0.9))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                if let countdown {
+                    Text(countdown)
+                        .font(.system(size: font * 0.68, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .lineLimit(1)
+                }
+            }
+            .fixedSize()
         }
     }
 

@@ -15,7 +15,10 @@ final class RemoteCommandTests: XCTestCase {
             .pair(code: "0420"),
             .openApp(id: UUID()),
             .setApps(HomeApp.defaults),
-            .tvPower
+            .tvPower,
+            .setAnime([AnimeEntry(title: "Frieren", currentEpisode: 3, totalEpisodes: 28,
+                                  weekday: 6, hour: 17, minute: 30,
+                                  updatedAt: Date(timeIntervalSince1970: 1_700_000_000))])
         ]
         for message in messages {
             let data = try RemoteProtocol.encode(message)
@@ -26,7 +29,10 @@ final class RemoteCommandTests: XCTestCase {
     func testRoundTripServerMessages() throws {
         let messages: [ServerMessage] = [
             .welcome, .pairingRequired, .pairingFailed(attemptsLeft: 3), .paired(token: "t0k3n"),
-            .apps(HomeApp.defaults), .notice("Fernseher aus")
+            .apps(HomeApp.defaults), .notice("Fernseher aus"),
+            .anime([AnimeEntry(title: "Frieren", currentEpisode: 3, totalEpisodes: 28,
+                               weekday: 6, hour: 17, minute: 30,
+                               updatedAt: Date(timeIntervalSince1970: 1_700_000_000))])
         ]
         for message in messages {
             let data = try RemoteProtocol.encode(message)

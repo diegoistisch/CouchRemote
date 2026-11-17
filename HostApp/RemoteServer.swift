@@ -96,6 +96,9 @@ final class RemoteServer: ObservableObject {
         home.onAppsChanged = { [weak self] apps in
             self?.broadcast(.apps(apps))
         }
+        home.onAnimeChanged = { [weak self] anime in
+            self?.broadcast(.anime(anime))
+        }
         home.onKeyboardRequest = { [weak self] appID in
             self?.broadcast(.showKeyboard(appID: appID))
         }
@@ -375,6 +378,7 @@ final class RemoteServer: ObservableObject {
                 authenticate(client, id: id, deviceID: device.id)
                 send(.welcome, to: client)
                 send(.apps(home.apps), to: client)
+                send(.anime(home.anime), to: client)
                 setUpFastChannel(for: client, id: id)
             } else {
                 let code = String(format: "%04d", Int.random(in: 0...9999))
@@ -391,6 +395,7 @@ final class RemoteServer: ObservableObject {
                 authenticate(client, id: id, deviceID: device.id)
                 send(.paired(token: token), to: client)
                 send(.apps(home.apps), to: client)
+                send(.anime(home.anime), to: client)
                 setUpFastChannel(for: client, id: id)
             } else if attemptsLeft > 1 {
                 client.phase = .awaitingCode(code: expected, attemptsLeft: attemptsLeft - 1)
@@ -407,6 +412,9 @@ final class RemoteServer: ObservableObject {
 
         case let (.setApps(apps), .authenticated):
             home.setApps(apps) // → onAppsChanged → broadcast an alle iPhones
+
+        case let (.setAnime(anime), .authenticated):
+            home.setAnime(anime) // → onAnimeChanged → broadcast an alle iPhones
 
         case let (.search(appID, query), .authenticated):
             home.search(appID: appID, query: String(query.prefix(200)))

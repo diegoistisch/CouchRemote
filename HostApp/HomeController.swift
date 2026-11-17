@@ -36,6 +36,8 @@ final class HomeController: ObservableObject {
     static let pills = Pill.allCases
 
     @Published private(set) var apps: [HomeApp] = []
+    /// Animes für die Liste „Als Nächstes“ (kommen vom iPhone, gespeichert).
+    @Published private(set) var anime: [AnimeEntry] = []
     @Published private(set) var focus: Focus = .app(0)
     /// Zuletzt ausgewählte App (für den Schnellzugriff darunter).
     @Published private(set) var currentAppIndex = 0
@@ -58,19 +60,25 @@ final class HomeController: ObservableObject {
 
     /// Wird nach jeder Änderung der App-Liste aufgerufen (Server schickt sie an alle iPhones).
     var onAppsChanged: (([HomeApp]) -> Void)?
+    /// Wird nach jeder Änderung der Anime-Liste aufgerufen (Server schickt sie an alle iPhones).
+    var onAnimeChanged: (([AnimeEntry]) -> Void)?
     /// Wird aufgerufen, wenn am Fernseher „Suchen“ gewählt wurde (iPhone soll die Tastatur zeigen).
     var onKeyboardRequest: ((UUID?) -> Void)?
 
     private var window: NSWindow?
     nonisolated static let wallpaperPathKey = "wallpaperPath"
 
-    private static var storeURL: URL {
+    private static var supportDirectory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return base.appendingPathComponent("CouchHost", isDirectory: true).appendingPathComponent("apps.json")
+        return base.appendingPathComponent("CouchHost", isDirectory: true)
     }
+
+    private static var storeURL: URL { supportDirectory.appendingPathComponent("apps.json") }
+    private static var animeURL: URL { supportDirectory.appendingPathComponent("anime.json") }
 
     init() {
         apps = Self.loadApps()
+        anime = Self.loadAnime()
     }
 
     var currentApp: HomeApp? {
@@ -98,8 +106,7 @@ final class HomeController: ObservableObject {
 
     private func saveApps() {
         do {
-            try FileManager.default.createDirectory(at: Self.storeURL.deletingLastPathComponent(),
-                                                    withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: Self.supportDirectory, withIntermediateDirectories: true)
             try JSONEncoder().encode(apps).write(to: Self.storeURL, options: .atomic)
         } catch {
             NSLog("CouchHost: Apps konnten nicht gespeichert werden: \(error)")
@@ -115,6 +122,31 @@ final class HomeController: ObservableObject {
         if case .shortcut = focus { focus = .app(currentAppIndex) }
         saveApps()
         onAppsChanged?(apps)
+    }
+
+    // MARK: - Anime
+
+    private static func loadAnime() -> [AnimeEntry] {
+        guard let data = try? Data(contentsOf: animeURL),
+              let saved = try? JSONDecoder().decode([AnimeEntry].self, from: data) else { return [] }
+        return saved
+    }
+
+    private func saveAnime() {
+        do {
+            try FileManager.default.createDirectory(at: Self.supportDirectory, withIntermediateDirectories: true)
+            try JSONEncoder().encode(anime).write(to: Self.animeURL, options: .atomic)
+        } catch {
+            NSLog("CouchHost: Animes konnten nicht gespeichert werden: \(error)")
+        }
+    }
+
+    /// Übernimmt eine neue Anime-Liste vom iPhone. Ungültige Einträge fallen raus.
+    func setAnime(_ newAnime: [AnimeEntry]) {
+        var seen = Set<UUID>()
+        anime = Array(newAnime.filter { $0.isValid && seen.insert($0.id).inserted }.prefix(AnimeEntry.maxCount))
+        saveAnime()
+        onAnimeChanged?(anime)
     }
 
     // MARK: - Öffnen und Suchen

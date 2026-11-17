@@ -55,6 +55,8 @@ public enum ClientMessage: Codable, Equatable, Sendable {
     case search(appID: UUID, query: String)
     /// Fernseher ein- bzw. ausschalten (der Mac fragt den aktuellen Zustand selbst ab).
     case tvPower
+    /// Anime-Liste („Als Nächstes“ auf der Startseite) komplett ersetzen.
+    case setAnime([AnimeEntry])
 }
 
 /// Nachrichten Mac → iPhone.
@@ -73,6 +75,8 @@ public enum ServerMessage: Codable, Equatable, Sendable {
     case fastChannelConfirmed
     /// Kurze Rückmeldung fürs iPhone, z. B. „Fernseher aus“ (nach `tvPower`) oder „Opening übersprungen“.
     case notice(String)
+    /// Aktuelle Anime-Liste (nach dem Anmelden und bei jeder Änderung).
+    case anime([AnimeEntry])
 }
 
 public enum RemoteProtocol {
