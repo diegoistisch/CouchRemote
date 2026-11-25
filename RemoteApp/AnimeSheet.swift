@@ -2,13 +2,18 @@ import RemoteKit
 import SwiftUI
 
 /// Animes, die gerade laufen: was als Nächstes erscheint und wann. Dieselbe Liste steht am Fernseher
-/// auf der Startseite unter „Als Nächstes“. Antippen bearbeitet, wischen löscht.
+/// auf der Startseite unter „Als Nächstes“. Hinzufügen per Suche (Live-Daten von AniList) oder von Hand.
+/// Antippen zeigt Details oder bearbeitet, wischen löscht.
 struct AnimeSheet: View {
     @EnvironmentObject private var client: RemoteClient
     @Environment(\.dismiss) private var dismiss
 
     @State private var editing: AnimeEntry?
+    @State private var showing: AnimeEntry?
     @State private var isAdding = false
+    @State private var isSearching = false
+    /// Eingetragener Anime, der mit AniList verknüpft werden soll.
+    @State private var linking: AnimeEntry?
 
     var body: some View {
         NavigationStack {
@@ -23,12 +28,23 @@ struct AnimeSheet: View {
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        isAdding = true
+                        isSearching = true
                     } label: {
                         Image(systemName: "plus")
                     }
                     .accessibilityLabel("Anime hinzufügen")
                     .disabled(client.anime.count >= AnimeEntry.maxCount)
+                }
+            }
+            .sheet(isPresented: $isSearching) {
+                AnimeSearchView(initialQuery: "", addedIDs: linkedIDs) { media in
+                    client.setAnime(client.anime + [AnimeEntry(media: media)])
+                } onManual: {
+                    isSearching = false
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(450))
+                        isAdding = true
+                    }
                 }
             }
             .sheet(isPresented: $isAdding) {
@@ -39,9 +55,31 @@ struct AnimeSheet: View {
             .sheet(item: $editing) { entry in
                 AnimeEditor(entry: entry) { updated in
                     client.setAnime(client.anime.map { $0.id == updated.id ? updated : $0 })
+                } onLink: {
+                    editing = nil
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(450))
+                        linking = entry
+                    }
                 }
             }
+            .sheet(item: $linking) { entry in
+                AnimeSearchView(initialQuery: entry.title, addedIDs: linkedIDs) { media in
+                    // Gleicher Eintrag (gleiche ID), ab jetzt mit Live-Daten
+                    var linked = AnimeEntry(media: media)
+                    linked.id = entry.id
+                    client.setAnime(client.anime.map { $0.id == entry.id ? linked : $0 })
+                }
+            }
+            .sheet(item: $showing) { entry in
+                AnimeDetailView(entryID: entry.id)
+                    .environmentObject(client)
+            }
         }
+    }
+
+    private var linkedIDs: Set<Int> {
+        Set(client.anime.compactMap { $0.aniList?.id })
     }
 
     @ViewBuilder
@@ -50,10 +88,11 @@ struct AnimeSheet: View {
             ContentUnavailableView {
                 Label("Keine Animes", systemImage: "calendar.badge.clock")
             } description: {
-                Text("Trag ein, welche Folge gerade draußen ist und wann die nächste kommt. Die Liste erscheint am Fernseher auf der Startseite unter „Als Nächstes“.")
+                Text("Such nach einem Anime: Welche Folge draußen ist und wann die nächste kommt, kommt live von AniList. Die Liste erscheint am Fernseher auf der Startseite unter „Als Nächstes“.")
             } actions: {
-                Button("Anime hinzufügen") { isAdding = true }
+                Button("Anime suchen") { isSearching = true }
                     .buttonStyle(.borderedProminent)
+                Button("Von Hand eintragen") { isAdding = true }
             }
         } else {
             let today = AnimeEntry.today(client.anime, at: now)
@@ -61,6 +100,9 @@ struct AnimeSheet: View {
             let upcoming = AnimeEntry.upcoming(client.anime, at: now).filter { !todayIDs.contains($0.id) }
             let finished = client.anime
                 .filter { $0.isFinished(at: now) && !todayIDs.contains($0.id) }
+                .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+            let waiting = client.anime
+                .filter { $0.isWaitingForDate(at: now) && !todayIDs.contains($0.id) }
                 .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
 
             List {
@@ -92,7 +134,7 @@ struct AnimeSheet: View {
                                     }
                                 }
                             } subtitle: {
-                                Text("Folge \(release.episode) von \(release.entry.totalEpisodes)")
+                                Text(release.entry.episodeText(release.episode))
                             }
                             .listRowBackground(Color.orange.opacity(isOut ? 0.12 : 0.2))
                         }
@@ -121,7 +163,7 @@ struct AnimeSheet: View {
                                     }
                                 }
                             } subtitle: {
-                                Text("Folge \(release.episode) von \(release.entry.totalEpisodes)")
+                                Text(release.entry.episodeText(release.episode))
                             }
                         }
                         .onDelete { offsets in
@@ -130,7 +172,26 @@ struct AnimeSheet: View {
                     } header: {
                         Text("Als Nächstes")
                     } footer: {
-                        Text("Nach jedem Termin zählt die Folge automatisch eine weiter.")
+                        Text(linkedIDs.isEmpty
+                             ? "Nach jedem Termin zählt die Folge automatisch eine weiter."
+                             : "Gesuchte Animes holt der Mac laufend live von AniList.")
+                    }
+                }
+
+                if !waiting.isEmpty {
+                    Section("Noch kein Termin") {
+                        ForEach(waiting) { entry in
+                            row(entry, now: now) {
+                                Image(systemName: "hourglass")
+                                    .foregroundStyle(.secondary)
+                            } subtitle: {
+                                let aired = entry.airedEpisode(at: now)
+                                Text(aired == 0 ? "Noch keine Folge draußen" : "Zuletzt \(entry.episodeText(aired))")
+                            }
+                        }
+                        .onDelete { offsets in
+                            delete(offsets.map { waiting[$0].id })
+                        }
                     }
                 }
 
@@ -159,9 +220,16 @@ struct AnimeSheet: View {
         @ViewBuilder subtitle: () -> Subtitle
     ) -> some View {
         Button {
-            editing = entry.rebased(at: now)
+            if entry.aniList != nil {
+                showing = entry
+            } else {
+                editing = entry.rebased(at: now)
+            }
         } label: {
             HStack(spacing: 12) {
+                if let aniList = entry.aniList {
+                    AnimeCover(url: aniList.coverURL, width: 40)
+                }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(entry.title)
                         .font(.headline)
@@ -170,7 +238,7 @@ struct AnimeSheet: View {
                     subtitle()
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text(entry.scheduleText)
+                    Text(scheduleText(entry, now: now))
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
@@ -180,6 +248,13 @@ struct AnimeSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    /// „Dienstag, 17:00“, bei AniList mit Status davor („Läuft · Dienstag, 17:00“).
+    private func scheduleText(_ entry: AnimeEntry, now: Date) -> String {
+        guard let aniList = entry.aniList else { return entry.scheduleText }
+        if entry.isFinished(at: now) || entry.nextRelease(at: now) == nil { return "AniList · \(aniList.statusText)" }
+        return "AniList · \(entry.scheduleText)"
     }
 
     private func delete(_ ids: [UUID]) {
@@ -192,6 +267,8 @@ struct AnimeSheet: View {
 struct AnimeEditor: View {
     let entry: AnimeEntry?
     let onSave: (AnimeEntry) -> Void
+    /// Eingetragenen Anime mit AniList verknüpfen (nur beim Bearbeiten).
+    var onLink: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @State private var title: String
@@ -200,9 +277,10 @@ struct AnimeEditor: View {
     @State private var weekday: Int
     @State private var time: Date
 
-    init(entry: AnimeEntry?, onSave: @escaping (AnimeEntry) -> Void) {
+    init(entry: AnimeEntry?, onSave: @escaping (AnimeEntry) -> Void, onLink: (() -> Void)? = nil) {
         self.entry = entry
         self.onSave = onSave
+        self.onLink = onLink
         let calendar = Calendar.current
         let now = Date()
         _title = State(initialValue: entry?.title ?? "")
@@ -266,6 +344,18 @@ struct AnimeEditor: View {
                         LabeledContent("Folge \(next.episode)", value: AnimeEntry.releaseLabel(for: next.date))
                     } header: {
                         Text("Als Nächstes")
+                    }
+                }
+
+                if let onLink {
+                    Section {
+                        Button {
+                            onLink()
+                        } label: {
+                            Label("Live-Daten von AniList holen", systemImage: "antenna.radiowaves.left.and.right")
+                        }
+                    } footer: {
+                        Text("Sucht den Anime auf AniList. Folge und Termin kommen dann automatisch, du musst nichts mehr eintragen.")
                     }
                 }
             }
