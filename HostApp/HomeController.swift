@@ -79,6 +79,7 @@ final class HomeController: ObservableObject {
     init() {
         apps = Self.loadApps()
         anime = Self.loadAnime()
+        startAniListSync()
     }
 
     var currentApp: HomeApp? {
@@ -144,9 +145,75 @@ final class HomeController: ObservableObject {
     /// Übernimmt eine neue Anime-Liste vom iPhone. Ungültige Einträge fallen raus.
     func setAnime(_ newAnime: [AnimeEntry]) {
         var seen = Set<UUID>()
+        let previous = Dictionary(anime.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let oldIDs = Set(anime.compactMap { $0.aniList?.id })
         anime = Array(newAnime.filter { $0.isValid && seen.insert($0.id).inserted }.prefix(AnimeEntry.maxCount))
+            .map { entry in
+                // Das iPhone schickt die Liste so, wie es sie kennt. Hat der Mac inzwischen frischere
+                // AniList-Daten geholt, bleiben die stehen.
+                guard let incoming = entry.aniList, let known = previous[entry.id],
+                      let knownInfo = known.aniList, knownInfo.id == incoming.id,
+                      knownInfo.syncedAt > incoming.syncedAt else { return entry }
+                var merged = known
+                merged.title = entry.title
+                return merged
+            }
         saveAnime()
         onAnimeChanged?(anime)
+        // Neu verknüpfte Animes sofort mit Live-Daten füllen.
+        if !Set(anime.compactMap { $0.aniList?.id }).subtracting(oldIDs).isEmpty {
+            startAniListSync()
+        }
+    }
+
+    // MARK: - AniList
+
+    private let aniList = AniListClient()
+    private var aniListTask: Task<Void, Never>?
+
+    /// Holt die Live-Daten für alle verknüpften Animes jetzt und danach regelmäßig neu:
+    /// alle 30 Minuten und kurz nach jeder angekündigten Folge.
+    func startAniListSync() {
+        aniListTask?.cancel()
+        aniListTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let delay = await self?.syncAniList() else { return }
+                try? await Task.sleep(for: .seconds(delay))
+            }
+        }
+    }
+
+    /// Ein Durchgang. Gibt zurück, in wie vielen Sekunden der nächste fällig ist.
+    private func syncAniList() async -> TimeInterval {
+        let ids = Array(Set(anime.compactMap { $0.aniList?.id }))
+        guard !ids.isEmpty else { return 30 * 60 }
+        let media: [AniListMedia]
+        do {
+            media = try await aniList.media(ids: ids)
+        } catch {
+            NSLog("CouchHost: AniList-Daten konnten nicht geholt werden: \(error.localizedDescription)")
+            return 5 * 60
+        }
+        guard !Task.isCancelled else { return 0 }
+
+        let byID = Dictionary(media.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let now = Date()
+        let updated = anime.map { entry in
+            guard let id = entry.aniList?.id, let fresh = byID[id] else { return entry }
+            return entry.synced(with: fresh, at: now)
+        }
+        if updated != anime {
+            anime = updated
+            saveAnime()
+            onAnimeChanged?(anime)
+        }
+
+        var delay: TimeInterval = 30 * 60
+        if let soonest = anime.compactMap({ $0.aniList?.nextAiringAt }).filter({ $0 > now }).min() {
+            // Zwei Minuten nach der Ausstrahlung nachsehen, dann steht die nächste Folge schon fest.
+            delay = min(delay, soonest.timeIntervalSince(now) + 120)
+        }
+        return max(delay, 60)
     }
 
     // MARK: - Öffnen und Suchen

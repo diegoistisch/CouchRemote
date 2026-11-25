@@ -7,6 +7,10 @@ import Foundation
 /// erreicht ist. Man muss die Folge also nicht jede Woche von Hand hochzählen.
 ///
 /// Wochentag und Uhrzeit gelten in der Zeitzone des Geräts (iPhone und Mac stehen im selben Haushalt).
+///
+/// Mit AniList verknüpfte Einträge (`aniList` gesetzt) kommen aus der Suche am iPhone. Der Mac holt dafür
+/// regelmäßig die Live-Daten und überschreibt Folge, Termin und Folgenzahl (`synced(with:)`). Dazwischen
+/// zählt die App wie bei eingetragenen Animes selbst weiter.
 public struct AnimeEntry: Codable, Equatable, Hashable, Identifiable, Sendable {
     public var id: UUID
     public var title: String
@@ -17,11 +21,13 @@ public struct AnimeEntry: Codable, Equatable, Hashable, Identifiable, Sendable {
     public var weekday: Int
     public var hour: Int
     public var minute: Int
-    /// Wann `currentEpisode` eingetragen wurde.
+    /// Wann `currentEpisode` eingetragen wurde (bei AniList: wann sie ausgestrahlt wurde).
     public var updatedAt: Date
+    /// Live-Daten von AniList. `nil` = von Hand eingetragen.
+    public var aniList: AniListInfo?
 
     public init(id: UUID = UUID(), title: String, currentEpisode: Int, totalEpisodes: Int,
-                weekday: Int, hour: Int, minute: Int, updatedAt: Date = Date()) {
+                weekday: Int, hour: Int, minute: Int, updatedAt: Date = Date(), aniList: AniListInfo? = nil) {
         self.id = id
         self.title = title
         self.currentEpisode = currentEpisode
@@ -30,6 +36,7 @@ public struct AnimeEntry: Codable, Equatable, Hashable, Identifiable, Sendable {
         self.hour = hour
         self.minute = minute
         self.updatedAt = updatedAt
+        self.aniList = aniList
     }
 
     public static let maxCount = 50
@@ -45,10 +52,85 @@ public struct AnimeEntry: Codable, Equatable, Hashable, Identifiable, Sendable {
             && (0...59).contains(minute)
     }
 
+    // MARK: - AniList
+
+    /// Neuer Eintrag aus einem Suchtreffer.
+    public init(media: AniListMedia, at now: Date = Date(), calendar: Calendar = .current) {
+        self.init(title: media.title, currentEpisode: 0, totalEpisodes: 1, weekday: 1, hour: 0, minute: 0,
+                  updatedAt: now)
+        self = synced(with: media, at: now, calendar: calendar)
+    }
+
+    /// Übernimmt die Live-Daten von AniList: aktuelle Folge, Folgenzahl, Wochentag und Uhrzeit.
+    public func synced(with media: AniListMedia, at now: Date = Date(), calendar: Calendar = .current) -> AnimeEntry {
+        var copy = self
+        let info = media.info(syncedAt: now)
+        copy.aniList = info
+
+        // Zuletzt erschienene Folge
+        var current: Int
+        if let next = media.nextEpisode {
+            current = next - 1
+        } else if let last = media.lastEpisode {
+            current = last
+        } else if info.isOver {
+            current = media.episodes ?? 0
+        } else {
+            current = 0
+        }
+        if let last = media.lastEpisode { current = max(current, last) }
+
+        var total: Int
+        if info.isOver {
+            if media.status == "FINISHED", let episodes = media.episodes { current = max(current, episodes) }
+            total = max(current, 1)
+            current = total
+        } else {
+            // Unbekannte Folgenzahl (lange Serien): offen lassen, die Texte zeigen dann nur „Folge n“.
+            total = media.episodes ?? Self.maxEpisodes
+            total = max(total, media.nextEpisode ?? 1, current, 1)
+        }
+        copy.totalEpisodes = min(total, Self.maxEpisodes)
+        copy.currentEpisode = min(max(current, 0), copy.totalEpisodes)
+        // Ausgangspunkt fürs Weiterzählen: wann die aktuelle Folge kam. Unbekannt = lange her.
+        copy.updatedAt = media.lastAiredAt ?? Date(timeIntervalSince1970: 0)
+
+        if let slot = media.nextAiringAt ?? media.lastAiredAt {
+            let parts = calendar.dateComponents([.weekday, .hour, .minute], from: slot)
+            copy.weekday = parts.weekday ?? copy.weekday
+            copy.hour = parts.hour ?? copy.hour
+            copy.minute = parts.minute ?? copy.minute
+        }
+        return copy
+    }
+
+    /// Kennt man die Folgenzahl? (Bei laufenden AniList-Serien manchmal nicht.)
+    public var knowsTotalEpisodes: Bool {
+        guard let aniList else { return true }
+        return aniList.episodes != nil || aniList.isOver
+    }
+
+    /// „Folge 5 von 12“ oder nur „Folge 5“, wenn die Folgenzahl offen ist.
+    public func episodeText(_ episode: Int) -> String {
+        knowsTotalEpisodes ? "Folge \(episode) von \(totalEpisodes)" : "Folge \(episode)"
+    }
+
+    /// Läuft noch, aber der nächste Termin steht nicht fest (Pause, noch nicht angekündigt).
+    public func isWaitingForDate(at now: Date = Date(), calendar: Calendar = .current) -> Bool {
+        !isFinished(at: now, calendar: calendar) && nextRelease(at: now, calendar: calendar) == nil
+    }
+
     // MARK: - Termine
 
     /// Nächster Erscheinungstermin echt nach `date`.
+    ///
+    /// Bei AniList zählt der angekündigte Termin (auch wenn eine Woche Pause dazwischen ist). Erst danach
+    /// geht es im Wochenrhythmus weiter, bis der Mac neue Daten holt. Ohne angekündigten Termin gibt es keinen.
     public func releaseDate(after date: Date, calendar: Calendar = .current) -> Date? {
+        if let aniList {
+            guard let next = aniList.nextAiringAt else { return nil }
+            if date < next { return next }
+        }
         let components = DateComponents(hour: hour, minute: minute, second: 0, weekday: weekday)
         return calendar.nextDate(after: date, matching: components, matchingPolicy: .nextTime)
     }
